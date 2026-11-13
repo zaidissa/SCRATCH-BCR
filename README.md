@@ -22,22 +22,28 @@ land in **one object**.
 
 ```mermaid
 flowchart LR
-    IN[/"VDJ-B FASTQ"/] --> SC
-    CR0[/"Cell Ranger<br/>contigs"/] -.-> SC
-    subgraph S1["per sample"]
+    subgraph IN["① input"]
+        direction TB
+        FQ[/"VDJ-B FASTQ<br/>(mixed GEX/TCR OK)"/] --> SC["Samplesheet<br/>check"]
+        CT[/"or Cell Ranger<br/>contigs"/] -.-> SC
+    end
+    subgraph S1["② per sample"]
         direction TB
         CR["Cell Ranger<br/>VDJ"] --> AN["IgBLAST<br/>IMGT"] --> QC{{"QC"}}
     end
-    subgraph S2["per patient"]
+    subgraph S2["③ per patient"]
         direction TB
         CL["Clones<br/>SCOPer"] --> GS["Germlines<br/>+ SHM"] --> LN["Lineage<br/>trees"]
     end
-    SC["Samplesheet<br/>check"] --> CR
-    SC -.-> AN
-    QC --> CL
-    LN --> OB[("BCR object<br/>cells.tsv · Seurat")]
-    QC -.-> OB
-    OB -.-> GX["+ GEX<br/>Seurat"]
+    subgraph OUT["④ outputs"]
+        direction TB
+        CELLS[("post_qc_cells.tsv")] --> RDS["combineBCR<br/>+ Seurat .rds"]
+        CELLS --> GX["bcr_* on<br/>GEX Seurat"]
+        CELLS --> TM["TCRmerge<br/>→ .h5ad"]
+    end
+    IN --> S1
+    S1 -->|"passing<br/>cells"| S2
+    S2 -->|"clones · SHM<br/>· trees"| OUT
 
     classDef cr fill:#e8f1fb,stroke:#3b78c4,color:#1b3a5c
     classDef imm fill:#fdf0e3,stroke:#d9822b,color:#5c3510
@@ -45,16 +51,18 @@ flowchart LR
     classDef io fill:#f4f4f4,stroke:#888,color:#333
     class CR cr
     class SC,AN,QC,CL,GS,LN imm
-    class OB,GX sc
-    class IN,CR0 io
+    class CELLS,RDS,GX sc
+    class FQ,CT,TM io
+    style IN fill:transparent,stroke:#999,stroke-dasharray:4 3
     style S1 fill:transparent,stroke:#999,stroke-dasharray:4 3
     style S2 fill:transparent,stroke:#999,stroke-dasharray:4 3
+    style OUT fill:transparent,stroke:#999,stroke-dasharray:4 3
 ```
 
-<sub>Blue: Cell Ranger · orange: Immcantation · green: Seurat/scRepertoire. Dashed: optional
-routes (start from Cell Ranger contigs; attach to a GEX Seurat). SHM and trees are on by default.
-Step names in the code: SAMPLESHEET_CHECK → CELLRANGER_VDJ → CHANGEO_ANNOTATE → BCR_QC →
-DEFINE_CLONES → GERMLINE_SHM → LINEAGE → BCR_OBJECT → ATTACH_GEX.</sub>
+<sub>Blue: Cell Ranger · orange: Immcantation · green: Seurat/scRepertoire outputs. Dashed: optional
+(start from existing Cell Ranger contigs). SHM and trees are on by default. Step names in the code:
+SAMPLESHEET_CHECK → CELLRANGER_VDJ → CHANGEO_ANNOTATE → BCR_QC → DEFINE_CLONES → GERMLINE_SHM →
+LINEAGE → BCR_OBJECT → ATTACH_GEX.</sub>
 
 <details>
 <summary><b>What QC does to each contig</b> (click to expand)</summary>
