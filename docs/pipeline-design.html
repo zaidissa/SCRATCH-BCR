@@ -1,0 +1,365 @@
+<title>BCR-Pipeline Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column; the two diagrams break wider and scroll on phones. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #16202b;
+  --muted: #5a6776;
+  --line: #c9d1db;
+  --accent: #0e7a6e;
+  --accent-soft: #dff2ee;
+  --band-a: #eef1f5;
+  --band-b: #e7ecf2;
+  --c-cr: #c47a12;     /* Cell Ranger image */
+  --c-imm: #2f62b8;    /* Immcantation suite */
+  --c-sc: #a3407a;     /* scratch-tcr (Seurat / scRepertoire) */
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --surface: #19212a; --fg: #e4e9ef; --muted: #98a4b2; --line: #364250;
+    --accent: #3cc7b4; --accent-soft: #15332f; --band-a: #151b22; --band-b: #1a222b;
+    --c-cr: #e6a443; --c-imm: #6f9ae6; --c-sc: #d97cb1; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #19212a; --fg: #e4e9ef; --muted: #98a4b2; --line: #364250;
+  --accent: #3cc7b4; --accent-soft: #15332f; --band-a: #151b22; --band-b: #1a222b;
+  --c-cr: #e6a443; --c-imm: #6f9ae6; --c-sc: #d97cb1; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 44px; }
+header { display: flex; flex-direction: column; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: 40px; }
+h2 { font-size: 24px; }
+p { margin: 0; max-width: 68ch; }
+section { display: flex; flex-direction: column; gap: 14px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.dash { width: 22px; height: 0; border-top: 2px dashed var(--muted); display: inline-block; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--muted); }
+figcaption { font-size: 13px; color: var(--muted); max-width: 80ch; }
+
+/* SVG roles */
+.band-a { fill: var(--band-a); } .band-b { fill: var(--band-b); }
+.band-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; fill: var(--muted); }
+.box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.box.opt { stroke-dasharray: 5 4; stroke: var(--muted); }
+.box.key { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
+.name { font-family: var(--font-mono); font-weight: 600; font-size: 13.5px; fill: var(--fg); }
+.det { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+.flag { font-family: var(--font-mono); font-size: 10.5px; fill: var(--accent); }
+.lab { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+.out { font-family: var(--font-mono); font-size: 12px; fill: var(--fg); }
+.out-d { font-family: var(--font-body); font-size: 11px; fill: var(--muted); }
+.out.key { fill: var(--accent); font-weight: 600; }
+.edge { stroke: currentColor; stroke-width: 1.4; fill: none; }
+.edge.opt { stroke-dasharray: 5 4; }
+.edge.key { stroke: var(--accent); stroke-width: 2; }
+.s-cr { fill: var(--c-cr); } .s-imm { fill: var(--c-imm); } .s-sc { fill: var(--c-sc); }
+.arrowhead { fill: currentColor; }
+.arrowhead-key { fill: var(--accent); }
+
+/* Lists and tables */
+ol.qc { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; max-width: 72ch; }
+ol.qc li::marker { font-family: var(--font-mono); color: var(--muted); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
+td code { white-space: nowrap; }
+.pill { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.pill.on { color: var(--accent); border-color: var(--accent); }
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.status div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.status h3 { margin: 0; font-size: 14px; font-family: var(--font-mono); font-weight: 600; }
+.status p { font-size: 13.5px; color: var(--muted); }
+.ok { color: var(--accent); } .todo { color: var(--c-cr); }
+@media (max-width: 600px) { h1 { font-size: 30px; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Nextflow DSL2 · Cirro · v0.1.0</div>
+  <h1>BCR-Pipeline design</h1>
+  <p>10x 5′ VDJ-B reads in, one row of B-cell receptor metadata per cell out, keyed so it joins onto the SCRATCH-E2E gene-expression object next to the TCRtoolkit columns. The science follows nf-core/airrflow (Immcantation); the inputs, cell names and output bundle follow your existing pipelines.</p>
+</header>
+
+<section>
+  <h2>Process flow</h2>
+  <div class="legend" aria-label="Legend">
+    <span><i class="sw" style="background:var(--c-cr)"></i>syedsazaidi/cellranger:v9.0.1</span>
+    <span><i class="sw" style="background:var(--c-imm)"></i>immcantation/suite:4.5.0</span>
+    <span><i class="sw" style="background:var(--c-sc)"></i>syedsazaidi/scratch-tcr</span>
+    <span><i class="dash"></i>optional path</span>
+  </div>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 1100" role="img" aria-label="Flow: samplesheet check, then per sample Cell Ranger VDJ, IgBLAST annotation and QC; per patient clone calling, germlines and SHM, lineage trees; then one cohort-wide BCR object, optionally attached to a GEX Seurat object. Each step's published folder is listed on the right.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker>
+        <marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead-key"/></marker>
+      </defs>
+
+      <!-- scope bands -->
+      <rect x="0" y="0" width="920" height="164" class="band-a"/>
+      <rect x="0" y="164" width="920" height="380" class="band-b"/>
+      <rect x="0" y="544" width="920" height="336" class="band-a"/>
+      <rect x="0" y="880" width="920" height="220" class="band-b"/>
+      <text x="18" y="24" class="band-label">INPUT</text>
+      <text x="18" y="188" class="band-label">PER SAMPLE</text>
+      <text x="18" y="568" class="band-label">PER PATIENT</text>
+      <text x="18" y="582" class="lab">--clone_by patient_id</text>
+      <text x="18" y="904" class="band-label">COHORT</text>
+
+      <text x="610" y="24" class="band-label">PUBLISHED TO results/</text>
+
+      <!-- inputs -->
+      <rect x="200" y="36" width="152" height="48" rx="4" class="box"/>
+      <text x="276" y="57" text-anchor="middle" class="name" style="font-size:12.5px">FASTQ sheet</text>
+      <text x="276" y="74" text-anchor="middle" class="det">--input_type fastq</text>
+      <rect x="368" y="36" width="152" height="48" rx="4" class="box"/>
+      <text x="444" y="57" text-anchor="middle" class="name" style="font-size:12.5px">Cell Ranger outs</text>
+      <text x="444" y="74" text-anchor="middle" class="det">--input_type cellranger</text>
+      <line x1="276" y1="84" x2="276" y2="106" class="edge" marker-end="url(#ah)"/>
+      <line x1="444" y1="84" x2="444" y2="106" class="edge" marker-end="url(#ah)"/>
+
+      <rect x="200" y="108" width="320" height="42" rx="4" class="box"/>
+      <rect x="200" y="108" width="5" height="42" class="s-imm"/>
+      <text x="216" y="126" class="name">SAMPLESHEET_CHECK</text>
+      <text x="216" y="142" class="det">BCR lanes only (modality or path) · patient col</text>
+      <text x="610" y="126" class="out">pipeline_info/</text>
+      <text x="610" y="141" class="out-d">samplesheet.valid.csv, software_versions.yml</text>
+
+      <!-- per sample -->
+      <line x1="300" y1="150" x2="300" y2="194" class="edge" marker-end="url(#ah)"/>
+      <text x="308" y="176" class="lab">fastq · lanes grouped</text>
+      <line x1="476" y1="150" x2="476" y2="298" class="edge opt" marker-end="url(#ah)"/>
+      <text x="484" y="232" class="lab" transform="rotate(90 484 232)" text-anchor="middle">cellranger: skip</text>
+
+      <rect x="200" y="196" width="230" height="56" rx="4" class="box"/>
+      <rect x="200" y="196" width="5" height="56" class="s-cr"/>
+      <text x="216" y="219" class="name">CELLRANGER_VDJ</text>
+      <text x="216" y="238" class="det">cellranger vdj --chain IG</text>
+      <text x="610" y="219" class="out">cellranger/&lt;sample&gt;/outs/</text>
+      <text x="610" y="234" class="out-d">contigs, airr_rearrangement.tsv, web summary</text>
+
+      <line x1="300" y1="252" x2="300" y2="298" class="edge" marker-end="url(#ah)"/>
+      <text x="308" y="280" class="lab">contig FASTA + annotations</text>
+
+      <rect x="200" y="300" width="320" height="56" rx="4" class="box"/>
+      <rect x="200" y="300" width="5" height="56" class="s-imm"/>
+      <text x="216" y="323" class="name">CHANGEO_ANNOTATE</text>
+      <text x="216" y="342" class="det">IgBLAST vs IMGT · MakeDb.py igblast --10x</text>
+      <text x="610" y="323" class="out">immcantation/annotate/</text>
+      <text x="610" y="338" class="out-d">&lt;sample&gt;_db-pass.tsv (AIRR)</text>
+
+      <line x1="360" y1="356" x2="360" y2="402" class="edge" marker-end="url(#ah)"/>
+      <text x="368" y="384" class="lab">db-pass.tsv + 10x UMIs</text>
+
+      <rect x="200" y="404" width="320" height="56" rx="4" class="box"/>
+      <rect x="200" y="404" width="5" height="56" class="s-imm"/>
+      <text x="216" y="427" class="name">BCR_QC</text>
+      <text x="216" y="446" class="det">productive · 1 heavy · top light · cell_id</text>
+      <text x="610" y="427" class="out">BCR_QC/per_sample/</text>
+      <text x="610" y="442" class="out-d">airr_qc.tsv, contigs before/after QC</text>
+
+      <line x1="265" y1="460" x2="265" y2="486" class="edge" marker-end="url(#ah)"/>
+      <rect x="200" y="488" width="140" height="38" rx="4" class="box"/>
+      <rect x="200" y="488" width="5" height="38" class="s-imm"/>
+      <text x="212" y="512" class="name" style="font-size:12px">BCR_QC_COLLECT</text>
+      <text x="610" y="503" class="out">BCR_QC/tables/</text>
+      <text x="610" y="518" class="out-d">contigs_{before,after}_qc.tsv, summary + status</text>
+
+      <!-- to per patient -->
+      <line x1="440" y1="460" x2="440" y2="594" class="edge" marker-end="url(#ah)"/>
+      <text x="448" y="512" class="lab">airr_qc.tsv</text>
+      <text x="448" y="526" class="lab">grouped by patient</text>
+
+      <!-- before/after tables to object -->
+      <polyline points="200,507 130,507 130,948 198,948" class="edge" marker-end="url(#ah)"/>
+      <text x="122" y="728" class="lab" transform="rotate(-90 122 728)" text-anchor="middle">contig tables, pre/post QC</text>
+
+      <rect x="200" y="596" width="320" height="56" rx="4" class="box"/>
+      <rect x="200" y="596" width="5" height="56" class="s-imm"/>
+      <text x="216" y="619" class="name">DEFINE_CLONES</text>
+      <text x="216" y="638" class="det">SHazaM threshold (auto, flagged outside 0.05–0.25)</text>
+      <text x="610" y="619" class="out">immcantation/clones/</text>
+      <text x="610" y="634" class="out-d">clone-pass.tsv, threshold, distance plot</text>
+
+      <line x1="360" y1="652" x2="360" y2="698" class="edge" marker-end="url(#ah)"/>
+      <text x="368" y="680" class="lab">clone-pass.tsv</text>
+
+      <rect x="200" y="700" width="320" height="56" rx="4" class="box"/>
+      <rect x="200" y="700" width="5" height="56" class="s-imm"/>
+      <text x="216" y="723" class="name">GERMLINE_SHM</text>
+      <text x="510" y="723" text-anchor="end" class="flag">--run_shm on</text>
+      <text x="216" y="742" class="det">dowser germlines · SHazaM mu_freq, R/S by region</text>
+      <text x="610" y="723" class="out">immcantation/germline_shm/</text>
+      <text x="610" y="738" class="out-d">germ-pass.tsv (final AIRR table)</text>
+
+      <line x1="360" y1="756" x2="360" y2="802" class="edge" marker-end="url(#ah)"/>
+      <text x="368" y="784" class="lab">germ-pass.tsv</text>
+
+      <rect x="200" y="804" width="320" height="56" rx="4" class="box"/>
+      <rect x="200" y="804" width="5" height="56" class="s-imm"/>
+      <text x="216" y="827" class="name">LINEAGE</text>
+      <text x="510" y="827" text-anchor="end" class="flag">--run_lineage on</text>
+      <text x="216" y="846" class="det">dowser · pratchet · 500 largest clones ≥ 3 seqs</text>
+      <text x="610" y="827" class="out">immcantation/lineage/</text>
+      <text x="610" y="842" class="out-d">trees.rds, lineage_summary.tsv, top_trees.pdf</text>
+
+      <!-- into the object -->
+      <line x1="360" y1="860" x2="360" y2="910" class="edge" marker-end="url(#ah)"/>
+      <text x="352" y="890" class="lab" text-anchor="end">tree summary</text>
+      <polyline points="520,728 538,728 538,928 522,928" class="edge" marker-end="url(#ah)"/>
+      <text x="530" y="896" class="lab" text-anchor="end">final table</text>
+      <polyline points="520,624 556,624 556,956 522,956" class="edge opt" marker-end="url(#ah)"/>
+      <text x="566" y="790" class="lab" transform="rotate(90 566 790)" text-anchor="middle">SHM and trees both off</text>
+
+      <rect x="200" y="912" width="320" height="58" rx="4" class="box key"/>
+      <rect x="200" y="912" width="5" height="58" class="s-sc"/>
+      <text x="216" y="935" class="name">BCR_OBJECT</text>
+      <text x="216" y="955" class="det">post_qc_cells · combineBCR · Seurat .rds</text>
+      <text x="610" y="935" class="out key">bridge/merged_bcr_object/</text>
+      <text x="610" y="950" class="out-d">the bundle SCRATCH-TCRmerge reads</text>
+
+      <line x1="360" y1="970" x2="360" y2="1016" class="edge" marker-end="url(#ah)"/>
+      <text x="368" y="998" class="lab">post_qc_cells.tsv</text>
+
+      <rect x="200" y="1018" width="320" height="56" rx="4" class="box opt"/>
+      <rect x="200" y="1018" width="5" height="56" class="s-sc"/>
+      <text x="216" y="1041" class="name">ATTACH_GEX</text>
+      <text x="216" y="1060" class="det">bcr_* metadata onto your GEX Seurat</text>
+      <polyline points="40,1046 198,1046" class="edge opt" marker-end="url(#ah)"/>
+      <text x="40" y="1038" class="lab">--input_gex_object</text>
+      <text x="610" y="1041" class="out">seurat/</text>
+      <text x="610" y="1056" class="out-d">bcr_gex_seurat.rds + barcode join report</text>
+    </svg>
+    </div>
+    <figcaption>Work fans out per sample, regroups per patient so a clone seen at two timepoints gets one <code>clone_id</code>, then collapses into one cohort-wide bundle. With SHM and trees both off, clone calls go straight to <code>BCR_OBJECT</code>. If only trees are on, germlines are still built, because trees are rooted on them.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>How it merges with GEX and TCR</h2>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 940 320" role="img" aria-label="SCRATCH-TCRmerge runs twice. Run 1 joins the SCRATCH-E2E h5ad with TCRtoolkit cells. Run 2 takes run 1's merged h5ad and joins BCR-Pipeline cells, producing one h5ad with tcr, bcr and dual-receptor columns.">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker>
+        <marker id="ahk2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead-key"/></marker>
+      </defs>
+      <rect x="20" y="30" width="220" height="56" rx="4" class="box"/>
+      <text x="36" y="53" class="name">SCRATCH-E2E</text>
+      <text x="36" y="72" class="det">annotated .h5ad · &lt;sample&gt;_&lt;bc&gt;-1</text>
+
+      <rect x="20" y="120" width="220" height="56" rx="4" class="box"/>
+      <text x="36" y="143" class="name">TCRtoolkit</text>
+      <text x="36" y="162" class="det">bridge/merged_vdj_object/</text>
+
+      <rect x="20" y="210" width="220" height="56" rx="4" class="box key"/>
+      <text x="36" y="233" class="name">BCR-Pipeline</text>
+      <text x="36" y="252" class="det">bridge/merged_bcr_object/ + BCR_QC/</text>
+
+      <rect x="330" y="30" width="160" height="146" rx="4" class="box"/>
+      <text x="346" y="58" class="name">TCRmerge</text>
+      <text x="346" y="76" class="det">run 1 · --receptor tcr</text>
+      <text x="346" y="104" class="det">adds tcr_* columns</text>
+      <text x="346" y="122" class="det">rewrites /obs only</text>
+
+      <line x1="240" y1="58" x2="328" y2="58" class="edge" marker-end="url(#ah2)"/>
+      <text x="248" y="50" class="lab">--gex_h5ad</text>
+      <line x1="240" y1="148" x2="328" y2="148" class="edge" marker-end="url(#ah2)"/>
+      <text x="248" y="140" class="lab">--tcr_tables</text>
+
+      <polyline points="490,103 640,103 640,194" class="edge" marker-end="url(#ah2)"/>
+      <text x="500" y="95" class="lab">merged.h5ad as --gex_h5ad</text>
+
+      <rect x="560" y="196" width="160" height="84" rx="4" class="box key"/>
+      <text x="576" y="222" class="name">TCRmerge</text>
+      <text x="576" y="240" class="det">run 2 · --receptor bcr</text>
+      <text x="576" y="262" class="det">adds bcr_* columns</text>
+
+      <line x1="240" y1="238" x2="558" y2="238" class="edge key" marker-end="url(#ahk2)"/>
+      <text x="256" y="230" class="lab">post_qc_cells.tsv + contig tables</text>
+
+      <line x1="720" y1="238" x2="768" y2="238" class="edge" marker-end="url(#ah2)"/>
+      <rect x="770" y="176" width="150" height="124" rx="4" class="box"/>
+      <text x="784" y="200" class="name">merged.h5ad</text>
+      <text x="784" y="222" class="lab">tcr_*  bcr_*</text>
+      <text x="784" y="240" class="lab">tcr_has_tcr_match</text>
+      <text x="784" y="258" class="lab">bcr_has_bcr_match</text>
+      <text x="784" y="276" class="lab" style="fill:var(--accent)">vdj_dual_receptor</text>
+    </svg>
+    </div>
+    <figcaption>Both runs only rewrite the AnnData <code>/obs</code> table, so the expression matrix never passes through R and cohort size is not limited by R's 2.1 billion non-zero cap. Barcodes match across <code>-GEX</code> / <code>-TCR</code> / <code>-BCR</code> library names. Cells with both receptors are flagged as likely T+B doublets, never removed. For small cohorts, <code>ATTACH_GEX</code> does the same join directly on a Seurat object.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>QC rules, in the order they are applied</h2>
+  <p>Each contig gets the first reason it fails; <code>contigs_before_qc.tsv</code> records it in <code>qc_fail_reason</code>, so every dropped chain can be traced. A sample with no usable cells does not stop the run: it is marked <code>no_contigs</code> or <code>no_cells_passed</code> in <code>bcr_qc_summary.tsv</code> and named in a warning at the end.</p>
+  <ol class="qc">
+    <li><code>not_annotated</code>: IgBLAST could not assign V and J against IMGT.</li>
+    <li><code>non_productive</code>: frameshift or stop codon (<code>--bcr_productive_only</code>).</li>
+    <li><code>low_umi</code>: fewer UMIs than <code>--bcr_min_umis</code> (1).</li>
+    <li><code>multi_heavy</code>: the cell has more than one productive IGH, usually a doublet (<code>--bcr_drop_multi_heavy</code>).</li>
+    <li><code>no_heavy</code>: light chain only (<code>--bcr_require_heavy</code>).</li>
+    <li><code>extra_light</code> or <code>multi_light</code>: more than one light chain. The default keeps the highest-UMI one; <code>drop_cell</code> removes the cell.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Contracts with the sibling pipelines</h2>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>Contract</th><th>Value</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Cell ID</td><td><code>&lt;sample&gt;_&lt;barcode&gt;</code>, no <code>-1</code></td><td>Same as TCRtoolkit. TCRmerge scores both this and SCRATCH's <code>-1</code> form and picks the best match.</td></tr>
+      <tr><td>Bundle path</td><td><code>bridge/merged_bcr_object/</code></td><td>Mirrors TCRtoolkit's <code>merged_vdj_object</code>; TCRmerge's Cirro preprocess finds it by folder. Cells also carry the samplesheet's <code>timepoint</code>, <code>tissue</code> and other metadata.</td></tr>
+      <tr><td>Contig tables</td><td><code>BCR_QC/tables/contigs_{before,after}_qc.tsv</code></td><td>Lets TCRmerge report per-contig match rates.</td></tr>
+      <tr><td>Column prefix</td><td><code>bcr_</code></td><td>Sits beside <code>tcr_</code> without collisions; a second merge into the same prefix is refused.</td></tr>
+      <tr><td>Samplesheet</td><td>SCRATCH-E2E layout + <code>modality</code>, <code>patient_id</code></td><td>One sheet can drive GEX and BCR; non-BCR rows are ignored here.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Defaults that change cost</h2>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>Step</th><th>Default</th><th>Typical cost (5–20k B cells per patient)</th><th>Turn down with</th></tr></thead>
+    <tbody>
+      <tr><td>Cell Ranger VDJ</td><td><span class="pill on">on (fastq)</span></td><td>30–90 min per sample, 8 cpu / 32 GB</td><td><code>--input_type cellranger</code></td></tr>
+      <tr><td>Clones</td><td><span class="pill on">always</span></td><td>minutes</td><td><code>--clone_method identical</code></td></tr>
+      <tr><td>SHM</td><td><span class="pill on">on</span></td><td>2–10 min per patient</td><td><code>--run_shm false</code></td></tr>
+      <tr><td>Lineage trees</td><td><span class="pill on">on</span></td><td>pratchet 10–60 min · pml slower · igphyml hours</td><td>capped at the 500 largest clones per patient (<code>--lineage_max_clones</code>); <code>--run_lineage false</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Where it stands</h2>
+  <div class="status">
+    <div><h3 class="ok">Verified</h3><p>Full Docker run on real data: two 10x 5' BCR tumour libraries from a mixed GEX/TCR/BCR Cirro dataset, all 15 steps (Cell Ranger 9, IgBLAST, QC, clones, SHM, 7 trees, per-cell bundle). Cirro samplesheet build simulated on the real file listing with the Cirro SDK. Unit tests (incl. empty samples, BTC layout, summaries) and stub runs.</p></div>
+    <div><h3 class="todo">Not yet run</h3><p>A run on Cirro itself and its S3 VDJ reference path (overridable in the form); the automatic threshold fit on a cohort big enough for it; igphyml/pml trees; attaching to a real GEX object.</p></div>
+  </div>
+</section>
+</div>

@@ -1,0 +1,3 @@
+sample,contig_annotations,contig_fasta,patient_id
+PT1-BCR-D0,cellranger/PT1-BCR-D0/PT1-BCR-D0_filtered_contig_annotations.csv,cellranger/PT1-BCR-D0/PT1-BCR-D0_filtered_contig.fasta,PT1
+PT2-BCR-D0,cellranger/PT2-BCR-D0/PT2-BCR-D0_filtered_contig_annotations.csv,cellranger/PT2-BCR-D0/PT2-BCR-D0_filtered_contig.fasta,PT2

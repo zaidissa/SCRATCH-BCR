@@ -1,0 +1,6 @@
+sample,fastq_1,fastq_2,modality,patient_id,timepoint
+PT1-BCR-D0,fastq/PT1-BCR-D0_S1_L001_R1_001.fastq.gz,fastq/PT1-BCR-D0_S1_L001_R2_001.fastq.gz,BCR,PT1,D0
+PT1-BCR-D0,fastq/PT1-BCR-D0_S1_L002_R1_001.fastq.gz,fastq/PT1-BCR-D0_S1_L002_R2_001.fastq.gz,BCR,PT1,D0
+PT1-BCR-D30,fastq/PT1-BCR-D30_R1.fastq.gz,fastq/PT1-BCR-D30_R2.fastq.gz,BCR,PT1,D30
+PT2-BCR-D0,fastq/PT2-BCR-D0_S1_L001_R1_001.fastq.gz,fastq/PT2-BCR-D0_S1_L001_R2_001.fastq.gz,BCR,PT2,D0
+PT1-GEX-D0,fastq/PT1-GEX-D0_S1_L001_R1_001.fastq.gz,fastq/PT1-GEX-D0_S1_L001_R2_001.fastq.gz,GEX,PT1,D0

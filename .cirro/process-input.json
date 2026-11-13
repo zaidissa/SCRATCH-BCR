@@ -1,0 +1,23 @@
+{
+    "input": "",
+    "input_type": "$.params.dataset.paramJson.input.input_type",
+    "genome": "$.params.dataset.paramJson.input.genome",
+    "vdj_reference": "$.params.dataset.paramJson.input.vdj_reference",
+    "project_name": "$.params.dataset.paramJson.input.project_name",
+    "bcr_productive_only": "$.params.dataset.paramJson.qc.bcr_productive_only",
+    "bcr_min_umis": "$.params.dataset.paramJson.qc.bcr_min_umis",
+    "bcr_drop_multi_heavy": "$.params.dataset.paramJson.qc.bcr_drop_multi_heavy",
+    "bcr_require_heavy": "$.params.dataset.paramJson.qc.bcr_require_heavy",
+    "bcr_multi_light": "$.params.dataset.paramJson.qc.bcr_multi_light",
+    "clone_by": "$.params.dataset.paramJson.clones.clone_by",
+    "clone_method": "$.params.dataset.paramJson.clones.clone_method",
+    "clonal_threshold": "$.params.dataset.paramJson.clones.clonal_threshold",
+    "clonal_threshold_fallback": "$.params.dataset.paramJson.clones.clonal_threshold_fallback",
+    "run_shm": "$.params.dataset.paramJson.shm_lineage.run_shm",
+    "run_lineage": "$.params.dataset.paramJson.shm_lineage.run_lineage",
+    "lineage_build": "$.params.dataset.paramJson.shm_lineage.lineage_build",
+    "lineage_min_seqs": "$.params.dataset.paramJson.shm_lineage.lineage_min_seqs",
+    "lineage_max_clones": "$.params.dataset.paramJson.shm_lineage.lineage_max_clones",
+    "input_gex_object": "$.params.dataset.paramJson.seurat.input_gex_object",
+    "outdir": "$.params.dataset.s3|/data/"
+}

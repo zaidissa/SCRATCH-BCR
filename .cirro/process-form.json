@@ -1,0 +1,171 @@
+{
+    "ui": {},
+    "form": {
+        "title": "BCR-Pipeline: single-cell BCR (10x VDJ-B)",
+        "description": "Cell Ranger VDJ (--chain IG) -> IgBLAST/IMGT re-annotation -> BCR QC -> SCOPer clones per patient -> germlines, SHM and dowser lineage trees -> per-cell BCR object. Output bridge/merged_bcr_object/post_qc_cells.tsv joins onto the SCRATCH GEX .h5ad with SCRATCH-TCRmerge (Receptor = BCR), alongside TCRtoolkit's TCR table.",
+        "type": "object",
+        "properties": {
+            "input": {
+                "title": "Input",
+                "type": "object",
+                "properties": {
+                    "input_type": {
+                        "type": "string",
+                        "title": "Start from",
+                        "default": "fastq",
+                        "enum": [
+                            "fastq",
+                            "cellranger"
+                        ],
+                        "description": "fastq: raw 10x 5' VDJ-B FASTQs (Cell Ranger runs here). cellranger: an existing Cell Ranger vdj/multi output dataset (filtered_contig_annotations.csv + filtered_contig.fasta per sample). With a modality column in the sample sheet, only BCR rows are used."
+                    },
+                    "genome": {
+                        "type": "string",
+                        "title": "Genome",
+                        "default": "GRCh38",
+                        "enum": [
+                            "GRCh38",
+                            "GRCm39"
+                        ],
+                        "description": "GRCh38 = human, GRCm39 = mouse. Sets the Cell Ranger VDJ reference and the IMGT/IgBLAST species."
+                    },
+                    "project_name": {
+                        "type": "string",
+                        "title": "Project name",
+                        "default": "bcr"
+                    },
+                    "vdj_reference": {
+                        "type": "string",
+                        "title": "Cell Ranger VDJ reference (S3 folder, optional)",
+                        "default": "",
+                        "description": "Leave blank to use s3://btc-refdata/scratch/refdata-cellranger-vdj-GRCh38-alts-ensembl-7.1.0 (GRCh38) or the GRCm38 equivalent. Set an s3:// folder containing reference.json and fasta/regions.fa to override. FASTQ input only."
+                    }
+                }
+            },
+            "qc": {
+                "title": "BCR QC",
+                "type": "object",
+                "properties": {
+                    "bcr_productive_only": {
+                        "type": "boolean",
+                        "title": "Productive contigs only",
+                        "default": true
+                    },
+                    "bcr_min_umis": {
+                        "type": "integer",
+                        "title": "Minimum UMIs per contig",
+                        "default": 1
+                    },
+                    "bcr_drop_multi_heavy": {
+                        "type": "boolean",
+                        "title": "Drop cells with >1 heavy chain",
+                        "default": true,
+                        "description": "Two productive heavy chains in one barcode is usually a doublet. Immcantation's recommendation."
+                    },
+                    "bcr_require_heavy": {
+                        "type": "boolean",
+                        "title": "Require a heavy chain",
+                        "default": true,
+                        "description": "Clones are defined on the heavy chain; light-only cells cannot be assigned."
+                    },
+                    "bcr_multi_light": {
+                        "type": "string",
+                        "title": "Cells with >1 light chain",
+                        "default": "keep_top",
+                        "enum": [
+                            "keep_top",
+                            "drop_cell",
+                            "keep_all"
+                        ],
+                        "description": "keep_top keeps the highest-UMI light chain."
+                    }
+                }
+            },
+            "clones": {
+                "title": "Clonal grouping",
+                "type": "object",
+                "properties": {
+                    "clone_by": {
+                        "type": "string",
+                        "title": "Group samples by (column)",
+                        "default": "patient_id",
+                        "description": "Sample-sheet column naming the subject. All samples of one subject are pooled, so a clone seen at several timepoints gets one clone_id."
+                    },
+                    "clone_method": {
+                        "type": "string",
+                        "title": "Method",
+                        "default": "hierarchical",
+                        "enum": [
+                            "hierarchical",
+                            "identical"
+                        ]
+                    },
+                    "clonal_threshold": {
+                        "type": "string",
+                        "title": "Distance threshold",
+                        "default": "auto",
+                        "description": "auto fits it per subject with SHazaM; or a number such as 0.15."
+                    },
+                    "clonal_threshold_fallback": {
+                        "type": "number",
+                        "title": "Fallback threshold",
+                        "default": 0.15,
+                        "description": "Used when a subject has too few related cells for the auto fit."
+                    }
+                }
+            },
+            "shm_lineage": {
+                "title": "SHM and lineage trees",
+                "type": "object",
+                "properties": {
+                    "run_shm": {
+                        "type": "boolean",
+                        "title": "Somatic hypermutation",
+                        "default": true,
+                        "description": "Germline reconstruction + mutation frequency per sequence. A few minutes per subject."
+                    },
+                    "run_lineage": {
+                        "type": "boolean",
+                        "title": "Lineage trees",
+                        "default": true
+                    },
+                    "lineage_build": {
+                        "type": "string",
+                        "title": "Tree method",
+                        "default": "pratchet",
+                        "enum": [
+                            "pratchet",
+                            "pml",
+                            "igphyml"
+                        ],
+                        "description": "pratchet: parsimony, minutes. pml: maximum likelihood, slower. igphyml: B-cell SHM model, most accurate, hours."
+                    },
+                    "lineage_min_seqs": {
+                        "type": "integer",
+                        "title": "Minimum sequences per tree",
+                        "default": 3
+                    },
+                    "lineage_max_clones": {
+                        "type": "integer",
+                        "title": "Max trees per patient (largest clones first; 0 = all)",
+                        "default": 500
+                    }
+                }
+            },
+            "seurat": {
+                "title": "Optional: Seurat output",
+                "type": "object",
+                "properties": {
+                    "input_gex_object": {
+                        "type": "string",
+                        "title": "GEX Seurat object (.rds)",
+                        "default": "",
+                        "pathType": "dataset",
+                        "file": "**/*.rds",
+                        "description": "If given, also writes seurat/bcr_gex_seurat.rds: this object with bcr_* columns added. For large cohorts use SCRATCH-TCRmerge on the .h5ad instead (no R matrix-size limit)."
+                    }
+                }
+            }
+        }
+    }
+}
