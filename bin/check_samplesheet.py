@@ -77,6 +77,13 @@ def main():
     cols = [c.strip() for c in rows[0].keys()]
     rows = [{k.strip(): (v or "").strip() for k, v in r.items() if k is not None} for r in rows]
 
+    # Exact duplicate rows (a launcher listing one sample's metadata twice) are dropped;
+    # the same file in two DIFFERENT rows is still an error below.
+    uniq = list({tuple(sorted(r.items())): r for r in rows}.values())
+    if len(uniq) < len(rows):
+        print(f"[samplesheet] dropped {len(rows) - len(uniq)} exact duplicate row(s)")
+        rows = uniq
+
     missing = [c for c in REQUIRED[a.input_type] if c not in cols]
     if missing:
         die(f"missing column(s) {missing} for --input_type {a.input_type}. Found: {cols}")

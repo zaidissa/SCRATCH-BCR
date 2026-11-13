@@ -77,6 +77,15 @@ with tempfile.TemporaryDirectory() as d:
     check("sample name kept",          set(v["sample"]), {"G.D7.d30+C3.v1"})
     check("Cell Ranger-safe id",       set(v.cr_id), {"G_D7_d30_C3_v1"})
 
+    # A sample's rows repeated verbatim (Cirro listed its metadata twice) are dropped, not fatal.
+    with open(f"{d}/dup.csv", "w") as f:
+        f.write("sample,fastq_1,fastq_2,patient\n")
+        for _ in range(2):
+            f.write("A.d63+C3,A-BCR_S5_L001_R1_001.fastq.gz,A-BCR_S5_L001_R2_001.fastq.gz,P1\n")
+        f.write("A.d63+C3,A-BCR_S5_L002_R1_001.fastq.gz,A-BCR_S5_L002_R2_001.fastq.gz,P1\n")
+    run("python3", f"{BIN}/check_samplesheet.py", "dup.csv", "dup.valid.csv", cwd=d)
+    check("exact duplicate rows dropped", len(pd.read_csv(f"{d}/dup.valid.csv")), 2)
+
     if "--with-r" in sys.argv:
         print("merge_bcr_object.R")
         a["clone_id"] = "P1_" + a.groupby("cell_id").ngroup().astype(str)

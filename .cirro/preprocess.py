@@ -5,8 +5,8 @@ Cirro preprocessing for SCRATCH-BCR.
 1. Build the samplesheet main.nf reads, in one of two shapes:
 
    fastq       Cirro annotates a FASTQ dataset one row per FILE; Cell Ranger wants one row
-               per sample/lane with R1 and R2 in columns. Pivoted exactly as SCRATCH-E2E's
-               preprocess does (the version known to work on real Cirro FASTQ datasets).
+               per R1/R2 pair. Pairs are matched by file name (see samplesheet_fastq for why
+               not pivot_samplesheet), with one metadata row per sample.
                If the dataset's sample sheet has a `modality` column, check_samplesheet.py
                keeps only BCR rows; without one it reads the library from the FASTQ path
                (BTC-...-BCR-LIB/...), so a mixed GEX/TCR/BCR dataset - BTC datasets list
@@ -26,6 +26,8 @@ Process definition: keep `uses_sample_sheet` ENABLED for fastq input (sample nam
 patient_id come from it).
 """
 
+import re
+
 import pandas as pd
 from cirro.helpers.preprocess_dataset import PreprocessDataset
 
@@ -42,19 +44,54 @@ def _meta_columns(ds):
         return []
 
 
+# Read 1 / read 2 token in a FASTQ name: X_S1_L001_R1_001.fastq.gz, X_R1.fastq.gz, X.R1.fq.gz.
+READ_RE = re.compile(r"([._])R([12])((?:_\d{3})?\.f(?:ast)?q\.gz)$")
+
+
+def _sample_meta(ds) -> pd.DataFrame:
+    """One metadata row per sample. A sample present in two selected datasets is listed twice
+    in ds.samplesheet (seen on Cirro); merging on that would duplicate every file row."""
+    meta_cols = _meta_columns(ds)
+    sheet = ds.samplesheet[["sample", *meta_cols]]
+    dup = sorted(sheet.loc[sheet["sample"].duplicated(), "sample"].unique())
+    if dup:
+        ds.logger.info(f"Samples listed more than once in the sample metadata (kept the first "
+                       f"non-blank value per column): {dup}")
+    return sheet.groupby("sample", as_index=False, sort=False).first()
+
+
 def samplesheet_fastq(ds) -> pd.DataFrame:
+    """One row per R1/R2 pair, paired by FILE NAME.
+
+    Not ds.pivot_samplesheet(): Cirro's file table has no `lane` column and its
+    `sampleIndex` is the lane number, so pivoting on (sampleIndex, sample, lane) would pair
+    lane-1 reads of different libraries (GEX/TCR/BCR) listed under one sample name.
+    """
     if "sample" not in ds.samplesheet.columns:
         raise ValueError(f"Dataset samplesheet has no 'sample' column. Present: {list(ds.samplesheet.columns)}")
-    table = ds.pivot_samplesheet(
-        index=["sampleIndex", "sample", "lane"],
-        pivot_columns="read",
-        metadata_columns=_meta_columns(ds),
-        column_prefix="fastq_",
-    ).sort_values(by="sample")
-    missing = [c for c in ("fastq_1", "fastq_2") if c not in table.columns]
+    files = ds.files.drop_duplicates(subset=["sample", "file"])
+    pairs, unpaired = {}, []
+    for sample, f in zip(files["sample"], files["file"]):
+        m = READ_RE.search(f)
+        if not m:
+            unpaired.append(f)          # index reads (I1/I2) and anything that is not R1/R2
+            continue
+        key = (sample, f[:m.start()] + m.group(1) + "R?" + m.group(3))
+        pairs.setdefault(key, {})[f"fastq_{m.group(2)}"] = f
+    if unpaired:
+        ds.logger.info(f"Ignored {len(unpaired)} file(s) that are not R1/R2 reads, e.g. {unpaired[:3]}")
+    rows, missing = [], []
+    for (sample, _), r in sorted(pairs.items()):
+        if "fastq_1" in r and "fastq_2" in r:
+            rows.append({"sample": sample, **r})
+        else:
+            missing.append(next(iter(r.values())))
     if missing:
-        raise ValueError(f"Pivoted samplesheet lacks {missing} - is this a paired FASTQ dataset? "
-                         f"Columns: {list(table.columns)}")
+        raise ValueError(f"{len(missing)} FASTQ file(s) have no R1/R2 partner, e.g. {missing[:3]}. "
+                         f"Is this a paired FASTQ dataset?")
+    if not rows:
+        raise ValueError("No R1/R2 FASTQ pairs found in the dataset.")
+    table = pd.DataFrame(rows).merge(_sample_meta(ds), on="sample", how="left")
     if not any(c in table.columns for c in PATIENT_COLS):
         ds.logger.warning("No patient_id (or patient) in the dataset sample sheet: each sample will be its own "
                           "clone-calling subject, so clones shared across a patient's samples "
@@ -84,10 +121,8 @@ def samplesheet_cellranger(ds) -> pd.DataFrame:
             ds.logger.info(f"{sample}: {name} derived as sibling -> {row[col]}")
         rows.append(row)
     table = pd.DataFrame(rows)
-    meta = _meta_columns(ds)
-    if meta:
-        table = table.merge(ds.samplesheet[["sample", *meta]].drop_duplicates("sample"),
-                            on="sample", how="left")
+    if _meta_columns(ds):
+        table = table.merge(_sample_meta(ds), on="sample", how="left")
     return table
 
 
