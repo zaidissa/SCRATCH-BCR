@@ -1,26 +1,114 @@
 # SCRATCH-BCR
 
+[![Nextflow](https://img.shields.io/badge/nextflow-%E2%89%A524.04-23aa62?logo=nextflow&logoColor=white)](https://www.nextflow.io/)
+[![Docker](https://img.shields.io/badge/run%20with-docker-0db7ed?logo=docker&logoColor=white)](#containers)
+[![Cirro](https://img.shields.io/badge/runs%20on-Cirro-6f42c1)](#cirro)
+[![Immcantation](https://img.shields.io/badge/science-Immcantation%204.5-orange)](https://immcantation.readthedocs.io/)
+[![Validated](https://img.shields.io/badge/validated-real%2010x%20VDJ--B-brightgreen)](#validation)
+
 Single-cell **B-cell receptor** processing for 10x 5′ VDJ-B data, built to sit beside
 [SCRATCH-E2E](https://github.com/zaidissa/SCRATCH-E2E) (scRNA-seq) and
 [TCRtoolkit](https://github.com/KarchinLab/TCRtoolkit/tree/singlecell-master-summary) (scTCR),
 and to merge with them through [SCRATCH-TCRmerge](https://github.com/zaidissa/SCRATCH-TCRmerge).
+The science follows [nf-core/airrflow](https://nf-co.re/airrflow) (Immcantation); the cell
+naming, output bundle and Cirro packaging follow the SCRATCH pipelines, so GEX, TCR and BCR
+land in **one object**.
 
-The science follows [nf-core/airrflow](https://nf-co.re/airrflow) (the Immcantation framework);
-the inputs, cell naming, output bundle and Cirro packaging follow your existing pipelines, so a
-GEX, a TCR and a BCR result land in **one object**.
+**Jump to:** [Flow](#how-it-flows) · [Quick start](#quick-start) · [Samplesheet](#samplesheet) ·
+[Outputs](#outputs) · [Merging](#merging-with-scrna-seq-and-sctcr) · [SHM & trees](#shm-and-lineage-trees) ·
+[Parameters](#key-parameters) · [Cirro](#cirro) · [Validation](#validation)
 
+## How it flows
+
+```mermaid
+flowchart TD
+    IN[/"10x 5′ VDJ-B FASTQ<br/>(mixed GEX/TCR/BCR datasets OK)"/]
+    CR0[/"existing Cell Ranger contigs<br/>--input_type cellranger"/]
+
+    subgraph S0["① samplesheet"]
+        SC["SAMPLESHEET_CHECK<br/>keep BCR lanes · find patient column<br/>Cell Ranger-safe id"]
+    end
+
+    subgraph S1["② per sample"]
+        CR["CELLRANGER_VDJ<br/>--chain IG · Cell Ranger 9"]
+        AN["CHANGEO_ANNOTATE<br/>IgBLAST vs IMGT"]
+        QC{{"BCR_QC<br/>productive · ≥1 UMI<br/>1 heavy · top light"}}
+    end
+
+    subgraph S2["③ per patient"]
+        CL["DEFINE_CLONES<br/>SHazaM threshold → SCOPer"]
+        GS["GERMLINE_SHM<br/>dowser germlines · mutation freq"]
+        LN["LINEAGE<br/>dowser trees, 500 largest clones"]
+    end
+
+    subgraph S3["④ cohort"]
+        OB[("BCR_OBJECT<br/>post_qc_cells.tsv<br/>combineBCR · Seurat")]
+        GX["ATTACH_GEX<br/>bcr_* on your Seurat"]
+    end
+
+    IN --> SC
+    CR0 -. skips alignment .-> SC
+    SC -->|lanes grouped| CR
+    SC -. cellranger route .-> AN
+    CR -->|filtered contigs| AN
+    AN -->|AIRR table| QC
+    QC -->|passing cells,<br/>pooled by patient| CL
+    QC -->|QC tables| OB
+    CL -->|clone_id| GS
+    GS -->|germlines| LN
+    GS -->|SHM| OB
+    LN -->|trees| OB
+    OB -. optional .-> GX
+
+    classDef cr fill:#e8f1fb,stroke:#3b78c4,color:#1b3a5c
+    classDef imm fill:#fdf0e3,stroke:#d9822b,color:#5c3510
+    classDef sc fill:#eaf6ec,stroke:#3c9a52,color:#1d4a27
+    classDef io fill:#f4f4f4,stroke:#888,color:#333
+    class CR cr
+    class SC,AN,QC,CL,GS,LN imm
+    class OB,GX sc
+    class IN,CR0 io
+    style S0 fill:transparent,stroke:#999,stroke-dasharray:4 3
+    style S1 fill:transparent,stroke:#999,stroke-dasharray:4 3
+    style S2 fill:transparent,stroke:#999,stroke-dasharray:4 3
+    style S3 fill:transparent,stroke:#999,stroke-dasharray:4 3
 ```
-10x VDJ-B FASTQ ─┐                                   (or existing Cell Ranger contigs)
-                 ▼
-  CELLRANGER_VDJ --chain IG ........................ per sample
-  CHANGEO_ANNOTATE  IgBLAST vs IMGT (AssignGenes / MakeDb --10x)
-  BCR_QC            productive, ≥1 UMI, one heavy chain per cell, top light chain
-  DEFINE_CLONES     SHazaM threshold → SCOPer hierarchical clones ... per patient
-  GERMLINE_SHM      dowser germlines → SHazaM mutation frequency .... per patient  [on]
-  LINEAGE           dowser trees (parsimony by default) ............. per patient  [on]
-  BCR_OBJECT        post_qc_cells.tsv · combineBCR.rds · Seurat .rds
-  ATTACH_GEX        bcr_* columns on your GEX Seurat ................ [optional]
+
+<sub>Colours are containers: <b>blue</b> Cell Ranger · <b>orange</b> Immcantation suite · <b>green</b>
+Seurat/scRepertoire. SHM and trees are on by default (`--run_shm`, `--run_lineage`).</sub>
+
+<details>
+<summary><b>What QC does to each contig</b> (click to expand)</summary>
+
+The first rule a contig fails is recorded in `qc_fail_reason`
+(`BCR_QC/tables/contigs_before_qc.tsv`); nothing is silently dropped.
+
+```mermaid
+flowchart LR
+    C(["contig"]) --> A{"IgBLAST<br/>annotated?"}
+    A -- no --> F1["not_annotated"]
+    A -- yes --> P{"productive?"}
+    P -- no --> F2["non_productive"]
+    P -- yes --> U{"UMIs ≥<br/>--bcr_min_umis?"}
+    U -- no --> F3["low_umi"]
+    U -- yes --> H{"cell has<br/>&gt;1 heavy?"}
+    H -- yes --> F4["multi_heavy<br/>(likely doublet)"]
+    H -- no --> N{"cell has<br/>a heavy?"}
+    N -- no --> F5["no_heavy<br/>(light only)"]
+    N -- yes --> L{"&gt;1 light?"}
+    L -- "yes, keep_top" --> F6["extra_light<br/>(lower-UMI lights)"]
+    L -- no --> OK(["passes ✓"])
+    F6 -.-> OK
+
+    classDef bad fill:#fdecea,stroke:#c0392b,color:#6b1b13
+    classDef good fill:#eaf6ec,stroke:#3c9a52,color:#1d4a27
+    class F1,F2,F3,F4,F5,F6 bad
+    class OK good
 ```
+
+`--bcr_multi_light drop_cell` fails the whole cell (`multi_light`) instead; `keep_all` keeps
+every light chain. `--bcr_require_heavy false` keeps light-only cells (no clone call).
+</details>
 
 ## Quick start
 
@@ -43,12 +131,17 @@ Mouse: `--genome GRCm39` (Cell Ranger VDJ reference GRCm38-alts-ensembl-7.0.0; I
 `mouse`). HPC without Docker: `-profile singularity`. Apple Silicon Mac: `-profile arm64`
 (the images are x86_64 and run under Rosetta).
 
-**Resource ceilings.** Set them on the command line or in a `-params-file`:
+<details>
+<summary><b>Resource ceilings</b> (and why a <code>-c</code> config needs <code>process.resourceLimits</code>)</summary>
+
+Set them on the command line or in a `-params-file`:
 `--max_cpus 14 --max_memory 52.GB`. A `params { max_cpus = ... }` block inside a `-c` config
 file is read too late to change the ceiling (conf/base.config has already computed
 `resourceLimits`); in a `-c` file set `process.resourceLimits = [cpus: 14, memory: 52.GB, time: 240.h]`
 instead. A task asking for more CPUs than the machine has fails with "Process requirement
 exceeds available CPUs".
+
+</details>
 
 ## Samplesheet
 
@@ -115,6 +208,9 @@ results/
 
 ### `post_qc_cells.tsv` columns
 
+<details>
+<summary><b>All columns</b> (click to expand)</summary>
+
 | Column | Meaning |
 |---|---|
 | `cell_id`, `sample`, `subject`, `barcode` | `cell_id = <sample>_<barcode>` (no `-1`), TCRtoolkit's convention |
@@ -128,6 +224,8 @@ results/
 | `paired_bcr`, `multi_heavy_pre_qc`, `multi_light_pre_qc` | heavy+light both present; chain multiplicity **before** QC trimmed it |
 | `CTaa`, `CTgene` | `H:<cdr3>\|L:<cdr3>` (TCRtoolkit's labelled style) and gene string |
 
+</details>
+
 ## Failed samples
 
 A sample whose library gives no contigs (failed library, a TCR library labelled BCR) does
@@ -140,6 +238,22 @@ out-of-memory signals, then stops.
 ## Merging with scRNA-seq and scTCR
 
 BCR data is per-cell **metadata**, not a second matrix: it is added to the GEX object's cells.
+
+```mermaid
+flowchart LR
+    E["SCRATCH-E2E<br/>gex_annotated.h5ad"] --> M1
+    T["TCRtoolkit<br/>merged_vdj_object/<br/>post_qc_cells.tsv"] --> M1
+    M1["SCRATCH-TCRmerge<br/>run 1 · receptor = tcr"] -->|"merged.h5ad<br/>+ tcr_*"| M2
+    B["SCRATCH-BCR<br/>merged_bcr_object/<br/>post_qc_cells.tsv"] --> M2
+    M2["SCRATCH-TCRmerge<br/>run 2 · receptor = bcr"] --> R[("merged.h5ad<br/>tcr_* + bcr_*<br/>vdj_dual_receptor")]
+
+    classDef src fill:#f4f4f4,stroke:#888,color:#333
+    classDef run fill:#e8f1fb,stroke:#3b78c4,color:#1b3a5c
+    classDef out fill:#eaf6ec,stroke:#3c9a52,color:#1d4a27
+    class E,T,B src
+    class M1,M2 run
+    class R out
+```
 
 ### Recommended: SCRATCH-TCRmerge on the `.h5ad` (any cohort size)
 
@@ -221,11 +335,16 @@ FASTQ run.**
 
 ## Containers
 
+<details>
+<summary>Three images, all pinned (click to expand)</summary>
+
 | Image | Used by |
 |---|---|
 | `syedsazaidi/cellranger:v9.0.1` | CELLRANGER_VDJ (SCRATCH-E2E's image) |
 | `immcantation/suite:4.5.0` | annotation, QC, clones, germlines, SHM, trees (bundles IgBLAST + IMGT refs) |
 | `syedsazaidi/scratch-tcr:latest` | BCR_OBJECT, ATTACH_GEX (TCRtoolkit's single-cell image: Seurat, scRepertoire) |
+
+</details>
 
 ## Validation
 
