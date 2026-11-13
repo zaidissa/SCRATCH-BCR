@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cirro preprocessing for BCR-Pipeline.
+Cirro preprocessing for SCRATCH-BCR.
 
 1. Build the samplesheet main.nf reads, in one of two shapes:
 

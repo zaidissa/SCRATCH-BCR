@@ -1,4 +1,4 @@
-<title>BCR-Pipeline Design</title>
+<title>SCRATCH-BCR Design</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -95,7 +95,7 @@ td code { white-space: nowrap; }
 <div class="wrap">
 <header>
   <div class="eyebrow">Nextflow DSL2 · Cirro · v0.1.0</div>
-  <h1>BCR-Pipeline design</h1>
+  <h1>SCRATCH-BCR design</h1>
   <p>10x 5′ VDJ-B reads in, one row of B-cell receptor metadata per cell out, keyed so it joins onto the SCRATCH-E2E gene-expression object next to the TCRtoolkit columns. The science follows nf-core/airrflow (Immcantation); the inputs, cell names and output bundle follow your existing pipelines.</p>
 </header>
 
@@ -259,7 +259,7 @@ td code { white-space: nowrap; }
   <h2>How it merges with GEX and TCR</h2>
   <figure>
     <div class="scroll">
-    <svg viewBox="0 0 940 320" role="img" aria-label="SCRATCH-TCRmerge runs twice. Run 1 joins the SCRATCH-E2E h5ad with TCRtoolkit cells. Run 2 takes run 1's merged h5ad and joins BCR-Pipeline cells, producing one h5ad with tcr, bcr and dual-receptor columns.">
+    <svg viewBox="0 0 940 320" role="img" aria-label="SCRATCH-TCRmerge runs twice. Run 1 joins the SCRATCH-E2E h5ad with TCRtoolkit cells. Run 2 takes run 1's merged h5ad and joins SCRATCH-BCR cells, producing one h5ad with tcr, bcr and dual-receptor columns.">
       <defs>
         <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker>
         <marker id="ahk2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead-key"/></marker>
@@ -273,7 +273,7 @@ td code { white-space: nowrap; }
       <text x="36" y="162" class="det">bridge/merged_vdj_object/</text>
 
       <rect x="20" y="210" width="220" height="56" rx="4" class="box key"/>
-      <text x="36" y="233" class="name">BCR-Pipeline</text>
+      <text x="36" y="233" class="name">SCRATCH-BCR</text>
       <text x="36" y="252" class="det">bridge/merged_bcr_object/ + BCR_QC/</text>
 
       <rect x="330" y="30" width="160" height="146" rx="4" class="box"/>

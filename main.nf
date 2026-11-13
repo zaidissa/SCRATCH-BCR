@@ -3,7 +3,7 @@ nextflow.enable.dsl = 2
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    BCR-Pipeline - single-cell B-cell receptor processing
+    SCRATCH-BCR - single-cell B-cell receptor processing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     10x 5' VDJ-B FASTQ (or existing Cell Ranger contigs)
@@ -63,7 +63,7 @@ workflow {
         error "--lineage_build must be pratchet, pml or igphyml, got '${params.lineage_build}'."
     }
     log.info """
-    BCR-Pipeline  ${workflow.manifest.version}
+    SCRATCH-BCR  ${workflow.manifest.version}
       input       : ${params.input}  (${params.input_type})
       genome      : ${params.genome}  -> species ${species}
       clones by   : ${params.clone_by} (or patient / subject_id / donor if absent; see samplesheet log), threshold ${params.clonal_threshold} (${params.clone_method})
@@ -182,13 +182,13 @@ workflow {
     ch_versions
         .map { f -> f.text.trim() }
         .unique()
-        .mix(channel.of("Workflow:\n    BCR-Pipeline: ${workflow.manifest.version}\n    Nextflow: ${nextflow.version}".toString()))
+        .mix(channel.of("Workflow:\n    SCRATCH-BCR: ${workflow.manifest.version}\n    Nextflow: ${nextflow.version}".toString()))
         .collectFile(name: 'software_versions.yml', storeDir: "${params.outdir}/pipeline_info",
                      newLine: true, sort: true)
 
     workflow.onComplete = {
         log.info(workflow.success
-            ? "BCR-Pipeline finished. Per-cell BCR table: ${params.outdir}/bridge/merged_bcr_object/post_qc_cells.tsv"
-            : "BCR-Pipeline failed - see the error above.")
+            ? "SCRATCH-BCR finished. Per-cell BCR table: ${params.outdir}/bridge/merged_bcr_object/post_qc_cells.tsv"
+            : "SCRATCH-BCR failed - see the error above.")
     }
 }

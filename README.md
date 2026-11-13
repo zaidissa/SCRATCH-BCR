@@ -1,4 +1,4 @@
-# BCR-Pipeline
+# SCRATCH-BCR
 
 Single-cell **B-cell receptor** processing for 10x 5′ VDJ-B data, built to sit beside
 [SCRATCH-E2E](https://github.com/zaidissa/SCRATCH-E2E) (scRNA-seq) and

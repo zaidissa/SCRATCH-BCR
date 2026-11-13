@@ -1,6 +1,6 @@
 # Cirro process definition
 
-The files in this folder register BCR-Pipeline as a Cirro custom pipeline, the same way
+The files in this folder register SCRATCH-BCR as a Cirro custom pipeline, the same way
 SCRATCH-E2E, TCRtoolkit and SCRATCH-TCRmerge are registered.
 
 | File | Role |

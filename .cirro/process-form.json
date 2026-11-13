@@ -1,7 +1,7 @@
 {
     "ui": {},
     "form": {
-        "title": "BCR-Pipeline: single-cell BCR (10x VDJ-B)",
+        "title": "SCRATCH-BCR: single-cell BCR (10x VDJ-B)",
         "description": "Cell Ranger VDJ (--chain IG) -> IgBLAST/IMGT re-annotation -> BCR QC -> SCOPer clones per patient -> germlines, SHM and dowser lineage trees -> per-cell BCR object. Output bridge/merged_bcr_object/post_qc_cells.tsv joins onto the SCRATCH GEX .h5ad with SCRATCH-TCRmerge (Receptor = BCR), alongside TCRtoolkit's TCR table.",
         "type": "object",
         "properties": {
