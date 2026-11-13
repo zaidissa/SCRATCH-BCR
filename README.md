@@ -21,44 +21,23 @@ land in **one object**.
 ## How it flows
 
 ```mermaid
-flowchart TD
-    IN[/"10x 5′ VDJ-B FASTQ<br/>(mixed GEX/TCR/BCR datasets OK)"/]
-    CR0[/"existing Cell Ranger contigs<br/>--input_type cellranger"/]
-
-    subgraph S0["① samplesheet"]
-        SC["SAMPLESHEET_CHECK<br/>keep BCR lanes · find patient column<br/>Cell Ranger-safe id"]
+flowchart LR
+    IN[/"VDJ-B FASTQ"/] --> SC
+    CR0[/"Cell Ranger<br/>contigs"/] -.-> SC
+    subgraph S1["per sample"]
+        direction TB
+        CR["Cell Ranger<br/>VDJ"] --> AN["IgBLAST<br/>IMGT"] --> QC{{"QC"}}
     end
-
-    subgraph S1["② per sample"]
-        CR["CELLRANGER_VDJ<br/>--chain IG · Cell Ranger 9"]
-        AN["CHANGEO_ANNOTATE<br/>IgBLAST vs IMGT"]
-        QC{{"BCR_QC<br/>productive · ≥1 UMI<br/>1 heavy · top light"}}
+    subgraph S2["per patient"]
+        direction TB
+        CL["Clones<br/>SCOPer"] --> GS["Germlines<br/>+ SHM"] --> LN["Lineage<br/>trees"]
     end
-
-    subgraph S2["③ per patient"]
-        CL["DEFINE_CLONES<br/>SHazaM threshold → SCOPer"]
-        GS["GERMLINE_SHM<br/>dowser germlines · mutation freq"]
-        LN["LINEAGE<br/>dowser trees, 500 largest clones"]
-    end
-
-    subgraph S3["④ cohort"]
-        OB[("BCR_OBJECT<br/>post_qc_cells.tsv<br/>combineBCR · Seurat")]
-        GX["ATTACH_GEX<br/>bcr_* on your Seurat"]
-    end
-
-    IN --> SC
-    CR0 -. skips alignment .-> SC
-    SC -->|lanes grouped| CR
-    SC -. cellranger route .-> AN
-    CR -->|filtered contigs| AN
-    AN -->|AIRR table| QC
-    QC -->|passing cells,<br/>pooled by patient| CL
-    QC -->|QC tables| OB
-    CL -->|clone_id| GS
-    GS -->|germlines| LN
-    GS -->|SHM| OB
-    LN -->|trees| OB
-    OB -. optional .-> GX
+    SC["Samplesheet<br/>check"] --> CR
+    SC -.-> AN
+    QC --> CL
+    LN --> OB[("BCR object<br/>cells.tsv · Seurat")]
+    QC -.-> OB
+    OB -.-> GX["+ GEX<br/>Seurat"]
 
     classDef cr fill:#e8f1fb,stroke:#3b78c4,color:#1b3a5c
     classDef imm fill:#fdf0e3,stroke:#d9822b,color:#5c3510
@@ -68,14 +47,14 @@ flowchart TD
     class SC,AN,QC,CL,GS,LN imm
     class OB,GX sc
     class IN,CR0 io
-    style S0 fill:transparent,stroke:#999,stroke-dasharray:4 3
     style S1 fill:transparent,stroke:#999,stroke-dasharray:4 3
     style S2 fill:transparent,stroke:#999,stroke-dasharray:4 3
-    style S3 fill:transparent,stroke:#999,stroke-dasharray:4 3
 ```
 
-<sub>Colours are containers: <b>blue</b> Cell Ranger · <b>orange</b> Immcantation suite · <b>green</b>
-Seurat/scRepertoire. SHM and trees are on by default (`--run_shm`, `--run_lineage`).</sub>
+<sub>Blue: Cell Ranger · orange: Immcantation · green: Seurat/scRepertoire. Dashed: optional
+routes (start from Cell Ranger contigs; attach to a GEX Seurat). SHM and trees are on by default.
+Step names in the code: SAMPLESHEET_CHECK → CELLRANGER_VDJ → CHANGEO_ANNOTATE → BCR_QC →
+DEFINE_CLONES → GERMLINE_SHM → LINEAGE → BCR_OBJECT → ATTACH_GEX.</sub>
 
 <details>
 <summary><b>What QC does to each contig</b> (click to expand)</summary>
