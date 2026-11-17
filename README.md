@@ -349,8 +349,17 @@ FASTQ run.**
   7 lineage trees, the per-cell bundle. Not yet run: on Cirro itself, the automatic threshold
   fit on a cohort large enough for it, igphyml/pml trees, the merge with a real GEX object.
 
-## Citations
+## Documentation
+For more detailed documentation and advanced usage, refer to the Nextflow documentation and the comments within the subworkflow scripts.
 
-Immcantation: Gupta et al. 2015 (Change-O), Gupta et al. 2017 (SHazaM/SCOPer), Hoehn et al. 2022
-(dowser); IgBLAST: Ye et al. 2013; IMGT: Lefranc et al.; scRepertoire: Borcherding et al. 2020;
-nf-core/airrflow: Gabernet et al. 2024.
+## Contributing
+Contributions are welcome! Please submit a pull request or open an issue to discuss any changes.
+
+## License
+This project is available under the GNU General Public License v3.0. See the LICENSE file for more details.
+
+## Contact
+For questions or issues, please contact:
+
+sazaidi@mdanderson.org
+lwang22@mdanderson.org
