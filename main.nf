@@ -27,7 +27,7 @@ include { CELLRANGER_VDJ               } from './modules/local/cellranger_vdj.nf
 include { CHANGEO_ANNOTATE             } from './modules/local/changeo_annotate.nf'
 include { BCR_QC; BCR_QC_COLLECT; SAMPLE_STATUS } from './modules/local/bcr_qc.nf'
 include { DEFINE_CLONES; GERMLINE_SHM; LINEAGE } from './modules/local/immcantation.nf'
-include { BCR_OBJECT; ATTACH_GEX       } from './modules/local/bcr_object.nf'
+include { BCR_OBJECT; ATTACH_GEX; BCR_REPORT } from './modules/local/bcr_object.nf'
 
 // Functions, not `def x = { }` closures: Nextflow 26.x's strict parser rejects calling a
 // closure variable like a function (the same trap SCRATCH-E2E documents).
@@ -42,6 +42,11 @@ def truthy(value) {
 def resolveSheetPath(p, sheetDir) {
     def t = p.toString()
     return (t.startsWith('/') || t =~ /^[a-zA-Z0-9]+:\/\//) ? t : sheetDir.resolve(t).toString()
+}
+
+// Every file a channel emits, or the empty placeholder when it emits none.
+def orNoFile(ch, no_file) {
+    ch.collect().ifEmpty([no_file])
 }
 
 workflow {
@@ -190,6 +195,18 @@ workflow {
         ch_sheet
     )
     ch_versions = ch_versions.mix(BCR_OBJECT.out.versions)
+
+    // ── HTML report ──────────────────────────────────────────────────────────
+    // Optional inputs fall back to the empty placeholder so the report always runs.
+    BCR_REPORT(
+        BCR_OBJECT.out.post_cells,
+        BCR_QC_COLLECT.out.summary.ifEmpty(no_file),
+        SAMPLE_STATUS.out.tsv.ifEmpty(no_file),
+        orNoFile(DEFINE_CLONES.out.threshold, no_file),
+        orNoFile(DEFINE_CLONES.out.plot, no_file),
+        run_lineage ? orNoFile(LINEAGE.out.summary, no_file) : channel.value([no_file]),
+        run_lineage ? orNoFile(LINEAGE.out.trees, no_file)   : channel.value([no_file])
+    )
 
     if (params.input_gex_object) {
         ATTACH_GEX(file(params.input_gex_object, checkIfExists: true), BCR_OBJECT.out.post_cells)

@@ -146,6 +146,13 @@ with tempfile.TemporaryDirectory() as d:
         check("cr_id not carried",         "cr_id" in c.columns, False)
         for f in ("pre_qc_cells.tsv", "post_qc_seurat.rds", "post_qc_combineBCR.rds"):
             check(f"{f} written", os.path.exists(f"{d}/{f}"), True)
+        print("bcr_report.R")
+        run("Rscript", f"{BIN}/bcr_report.R", "--cells", "post_qc_cells.tsv", "--qc", "S1_qc_summary.tsv",
+            "--status", "sample_status.tsv", "--out", "report.html", cwd=d)
+        h = open(f"{d}/report.html").read()
+        check("report sections", [s for s in ("status", "qc", "isotypes", "clones", "shared", "shm", "ighv")
+                                  if f'id="{s}"' in h], ["status", "qc", "isotypes", "clones", "shared", "shm", "ighv"])
+        check("report figures embedded", h.count("data:image/png;base64") >= 10, True)
 
 print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILED: {failures}'}")
 sys.exit(1 if failures else 0)

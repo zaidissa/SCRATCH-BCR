@@ -15,7 +15,7 @@ naming, output bundle and Cirro packaging follow the SCRATCH pipelines, so GEX, 
 land in **one object**.
 
 **Jump to:** [Flow](#how-it-flows) · [Quick start](#quick-start) · [Samplesheet](#samplesheet) ·
-[Outputs](#outputs) · [Merging](#merging-with-scrna-seq-and-sctcr) · [SHM & trees](#shm-and-lineage-trees) ·
+[Outputs](#outputs) · [Report](#report) · [Merging](#merging-with-scrna-seq-and-sctcr) · [SHM & trees](#shm-and-lineage-trees) ·
 [Parameters](#key-parameters) · [Cirro](#cirro) · [Validation](#validation)
 
 ## How it flows
@@ -212,6 +212,22 @@ results/
 | `CTaa`, `CTgene` | `H:<cdr3>\|L:<cdr3>` (TCRtoolkit's labelled style) and gene string |
 
 </details>
+
+## Report
+
+`report/bcr_report.html` is one self-contained page (open it offline, light or dark):
+
+- **Sample status:** every sample, ok / low quality / failed, with the reason and Cell Ranger's key metrics
+- **Cell QC:** cells kept vs removed per sample, and why contigs were removed
+- **Isotypes:** IgM / IgD / IgG / IgA / IgE share per sample
+- **Clonal expansion:** cells by clone size per sample, and the largest clones (V gene, CDR3, SHM, samples)
+- **Clones across samples and time points:** clones shared by each pair of samples, and the shared clones' cells per sample in time order
+- **SHM:** heavy-chain mutation per cell by sample and by isotype
+- **IGHV usage:** the most used V genes per patient
+- **Clonal threshold:** the threshold per patient and how it was set
+- **Lineage trees:** the largest trees per patient, tips coloured by sample
+
+Every chart has its numbers in a table under it.
 
 ## Failed samples
 

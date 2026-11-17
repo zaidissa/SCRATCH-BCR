@@ -93,3 +93,51 @@ process ATTACH_GEX {
     printf '"%s":\\n    Seurat: stub\\n' "${task.process}" > versions.yml
     """
 }
+
+// Comma-joined staged files, without the NO_FILE placeholder.
+def realFiles(x) {
+    (x instanceof List ? x : [x]).findAll { f -> !f.name.startsWith('NO_FILE') }.join(',')
+}
+
+/*
+ * BCR_REPORT - one self-contained HTML report (bin/bcr_report.R): sample status, cell QC,
+ * isotypes, clonal expansion, clones shared across samples/time points, SHM, IGHV usage,
+ * the clonal threshold and lineage trees. Opens offline; light and dark page.
+ */
+process BCR_REPORT {
+    tag "${params.project_name}"
+    label 'process_low'
+    container "${params.container_immcantation}"
+
+    input:
+      path cells
+      path qc,         stageAs: 'qc/*'
+      path status,     stageAs: 'status/*'
+      path thresholds, stageAs: 'threshold/*'
+      path dist_plots, stageAs: 'dist/*'
+      path lineage,    stageAs: 'lineage/*'
+      path trees,      stageAs: 'trees/*'
+
+    output:
+      path "bcr_report.html", emit: html
+
+    script:
+    """
+    bcr_report.R \\
+        --cells ${cells} \\
+        --qc '${realFiles(qc)}' \\
+        --status '${realFiles(status)}' \\
+        --thresholds '${realFiles(thresholds)}' \\
+        --dist-plots '${realFiles(dist_plots)}' \\
+        --lineage '${realFiles(lineage)}' \\
+        --trees '${realFiles(trees)}' \\
+        --project '${params.project_name}' \\
+        --version '${workflow.manifest.version}' \\
+        --out bcr_report.html
+    """
+
+    stub:
+    """
+    echo '<!doctype html><title>SCRATCH-BCR report</title>' > bcr_report.html
+    """
+}
