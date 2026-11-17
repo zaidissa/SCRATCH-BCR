@@ -219,8 +219,13 @@ A sample whose library gives no contigs (failed library, a TCR library labelled 
 not stop the run. It stays in `BCR_QC/tables/bcr_qc_summary.tsv` with `status = no_contigs`
 (or `no_cells_passed` when contigs exist but every cell fails QC), the log ends with a
 warning naming it, and the other samples finish. If **every** sample fails, `BCR_OBJECT`
-stops with an error. A Cell Ranger crash is still a task failure: Nextflow retries it on
-out-of-memory signals, then stops.
+stops with an error.
+
+A sample whose **Cell Ranger run fails** (most often a damaged FASTQ: `corrupt deflate stream`)
+is skipped and the other samples finish; the log ends with a warning counting the skipped
+samples. Only out-of-memory / kill signals and lost hosts are retried, since a bad file fails the
+same way every time. Re-upload the file (`gzip -t file.fastq.gz` confirms the damage) and rerun.
+`--skip_failed_samples false` stops the whole run instead.
 
 ## Merging with scRNA-seq and scTCR
 
