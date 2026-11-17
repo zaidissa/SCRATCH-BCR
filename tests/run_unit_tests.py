@@ -112,6 +112,19 @@ with tempfile.TemporaryDirectory() as d:
           ["ok_low_quality", "few_cells,low_vdj_mapping"])
     check("no usable cells reason",    st.loc["E1", ["status", "reason"]].tolist(), ["failed", "no_contigs"])
     check("lost task reported",        st.loc["G1", "reason"], "task_failed")
+    # An unrecognised failure: the detail is Cell Ranger's _errors text, not its
+    # closing "Pipestance failed. Use --noexit ..." line.
+    os.makedirs(f"{d}/cr/STAGE/fork0", exist_ok=True)
+    with open(f"{d}/cr/STAGE/fork0/_errors", "w") as f:
+        f.write("Assembly panicked at stage ASSEMBLE_VDJ\n")
+    with open(f"{d}/vague.log", "w") as f:
+        f.write("[error] Pipestance failed. Error log at:\ncr/STAGE/fork0/_errors\n\n"
+                "Waiting 6 seconds for UI to do final refresh.\n"
+                "Pipestance failed. Use --noexit option to keep UI running after failure.\n")
+    run("python3", ss, "cellranger", "--sample", "V1", "--exit-code", "1", "--log", "vague.log",
+        "--pipestance", "cr", cwd=d)
+    v = pd.read_csv(f"{d}/V1_cellranger_status.tsv", sep="\t", keep_default_na=False).iloc[0]
+    check("real error text, not boilerplate", v["detail"], "Assembly panicked at stage ASSEMBLE_VDJ")
 
     if "--with-r" in sys.argv:
         print("merge_bcr_object.R")

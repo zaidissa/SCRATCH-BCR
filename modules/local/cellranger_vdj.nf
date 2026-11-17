@@ -57,7 +57,8 @@ process CELLRANGER_VDJ {
 
     if [ \$rc -eq 0 ] && [ "${cr}" != "${meta.id}" ]; then mv "${cr}" "${meta.id}"; fi
     sample_status.py cellranger --sample '${meta.id}' --subject '${meta.subject}' \\
-        --exit-code \$rc --log cellranger.log --metrics "${meta.id}/outs/metrics_summary.csv"
+        --exit-code \$rc --log cellranger.log --metrics "${meta.id}/outs/metrics_summary.csv" \\
+        --pipestance "${cr}"
 
     if [ \$rc -ne 0 ]; then
         reason=\$(awk -F'\\t' 'NR==1{for(i=1;i<=NF;i++) if(\$i=="reason") c=i} NR==2{print \$c}' ${meta.id}_cellranger_status.tsv)

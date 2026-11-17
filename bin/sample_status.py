@@ -32,7 +32,12 @@ FAILURES = [
                               r"no reads? (were )?(found|mapped)"),
     ("no_vdj_reads",          r"no (vdj|v\(d\)j)|insufficient.{0,40}v\(?d\)?j"),
     ("disk_full",             r"no space left on device|disk quota"),
+    ("chain_not_detected",    r"chain.{0,40}(could not|unable to|failed to|cannot) (be )?(auto-?)?detect|"
+                              r"(could not|unable to|failed to) (auto-?)?detect.{0,40}chain"),
 ]
+# Cell Ranger lines that say a run failed without saying why.
+BOILERPLATE = re.compile(r"pipestance failed|use --noexit|error log at|^waiting \d+ seconds|"
+                         r"^\S*/_errors$|^log message:$", re.I)
 
 # A run that finished but is weak. (metric, flag, test, threshold): flagged, never dropped.
 FLAGS = [
@@ -67,20 +72,27 @@ def cellranger(a):
     row = {"sample": a.sample, "subject": a.subject, "stage": "cellranger",
            "exit_code": a.exit_code, "status": "ok", "reason": "", "flags": "", "detail": ""}
     if a.exit_code != 0:
-        text = open(a.log, errors="replace").read() if os.path.exists(a.log) else ""
-        # Search Cell Ranger's error block (it starts at "[error]"), not the progress lines
-        # of a run that got far before failing; fall back to the log's tail.
-        i = text.lower().find("[error]")
-        text = text[i:] if i >= 0 else "\n".join(text.splitlines()[-60:])
+        log = open(a.log, errors="replace").read() if os.path.exists(a.log) else ""
+        # Cell Ranger's real message: the "Log message:" block it prints after
+        # "[error] Pipestance failed", and the _errors file(s) of the stage that failed.
+        # Its last line ("Pipestance failed. Use --noexit ...") is boilerplate.
+        msg = []
+        m = re.search(r"Log message:\s*\n(.*?)(?:\n\s*\n|\nWaiting \d+ seconds|\Z)", log, re.S)
+        if m:
+            msg.append(m.group(1))
+        for root, _, files in os.walk(a.pipestance or "/nonexistent"):
+            if "_errors" in files:
+                msg.append(open(os.path.join(root, "_errors"), errors="replace").read()[:4000])
+        i = log.lower().find("[error]")
+        text = "\n".join(msg + [log[i:] if i >= 0 else "\n".join(log.splitlines()[-60:])])
         hit = next(((r, pat) for r, pat in FAILURES if re.search(pat, text, re.I)), None)
         reason = hit[0] if hit else "cellranger_error"
-        # The most specific line: the one that gave the reason, else Cell Ranger's own error
-        # text, else the last non-blank line.
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        lines = [l.strip() for l in text.splitlines() if l.strip() and not BOILERPLATE.search(l)]
         err = ([l for l in lines if re.search(hit[1], l, re.I)] if hit else []) or \
+              [l for l in "\n".join(msg).splitlines() if l.strip()] or \
               [l for l in lines if re.search(r"error|fail|corrupt|invalid", l, re.I)]
         row.update(status="failed", reason=reason,
-                   detail=((err or lines or ["no log"])[-1])[:300].replace("\t", " "))
+                   detail=" ".join(err[:1] or lines[-1:] or ["no log"])[:300].replace("\t", " "))
     elif a.metrics and os.path.exists(a.metrics):
         with open(a.metrics, newline="") as f:
             m = next(csv.DictReader(f), {}) or {}
@@ -147,6 +159,7 @@ if __name__ == "__main__":
     c.add_argument("--sample", required=True); c.add_argument("--subject", default="")
     c.add_argument("--exit-code", type=int, required=True)
     c.add_argument("--log", required=True); c.add_argument("--metrics")
+    c.add_argument("--pipestance", help="Cell Ranger run folder, searched for _errors files")
     k = sub.add_parser("collect")
     k.add_argument("--samplesheet", required=True); k.add_argument("--qc")
     k.add_argument("status", nargs="*")
