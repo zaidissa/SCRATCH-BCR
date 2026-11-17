@@ -87,6 +87,32 @@ with tempfile.TemporaryDirectory() as d:
     run("python3", f"{BIN}/check_samplesheet.py", "dup.csv", "dup.valid.csv", cwd=d)
     check("exact duplicate rows dropped", len(pd.read_csv(f"{d}/dup.valid.csv")), 2)
 
+    # Why each sample is in, flagged or out: a corrupt FASTQ, a weak run, a sample with
+    # no usable cells, and one whose task died without leaving a row.
+    print("sample_status.py")
+    with open(f"{d}/bad.log", "w") as f:
+        f.write("Detected chemistry SC5P-R2\n[error] Pipestance failed.\n    corrupt deflate stream\n")
+    with open(f"{d}/weak_metrics.csv", "w") as f:
+        f.write('Estimated Number of Cells,Valid Barcodes,Reads Mapped to Any V(D)J Gene\n37,95.1%,17.8%\n')
+    ss = f"{BIN}/sample_status.py"
+    run("python3", ss, "cellranger", "--sample", "B1", "--exit-code", "1", "--log", "bad.log", cwd=d)
+    run("python3", ss, "cellranger", "--sample", "W1", "--exit-code", "0", "--log", "none",
+        "--metrics", "weak_metrics.csv", cwd=d)
+    with open(f"{d}/st_sheet.csv", "w") as f:
+        f.write("sample,subject\nB1,P\nW1,P\nW1,P\nE1,P\nG1,P\n")
+    pd.concat([pd.read_csv(f"{d}/S1_qc_summary.tsv", sep="\t").assign(sample="W1"),
+               e.to_frame().T]).to_csv(f"{d}/st_qc.tsv", sep="\t", index=False)
+    run("python3", ss, "collect", "--samplesheet", "st_sheet.csv", "--qc", "st_qc.tsv",
+        "B1_cellranger_status.tsv", "W1_cellranger_status.tsv", cwd=d)
+    st = pd.read_csv(f"{d}/sample_status.tsv", sep="\t", keep_default_na=False).set_index("sample")
+    check("one row per sample",        list(st.index), ["B1", "W1", "E1", "G1"])
+    check("corrupt FASTQ reason",      st.loc["B1", ["status", "stage", "reason"]].tolist(),
+          ["failed", "cellranger", "corrupt_fastq"])
+    check("weak run kept, flagged",    st.loc["W1", ["status", "flags"]].tolist(),
+          ["ok_low_quality", "few_cells,low_vdj_mapping"])
+    check("no usable cells reason",    st.loc["E1", ["status", "reason"]].tolist(), ["failed", "no_contigs"])
+    check("lost task reported",        st.loc["G1", "reason"], "task_failed")
+
     if "--with-r" in sys.argv:
         print("merge_bcr_object.R")
         a["clone_id"] = "P1_" + a.groupby("cell_id").ngroup().astype(str)

@@ -215,17 +215,26 @@ results/
 
 ## Failed samples
 
-A sample whose library gives no contigs (failed library, a TCR library labelled BCR) does
-not stop the run. It stays in `BCR_QC/tables/bcr_qc_summary.tsv` with `status = no_contigs`
-(or `no_cells_passed` when contigs exist but every cell fails QC), the log ends with a
-warning naming it, and the other samples finish. If **every** sample fails, `BCR_OBJECT`
-stops with an error.
+No single sample stops the run. **`BCR_QC/tables/sample_status.tsv`** has one row per
+samplesheet sample saying whether it made it in, and if not, where and why:
 
-A sample whose **Cell Ranger run fails** (most often a damaged FASTQ: `corrupt deflate stream`)
-is skipped and the other samples finish; the log ends with a warning counting the skipped
-samples. Only out-of-memory / kill signals and lost hosts are retried, since a bad file fails the
-same way every time. Re-upload the file (`gzip -t file.fastq.gz` confirms the damage) and rerun.
-`--skip_failed_samples false` stops the whole run instead.
+| status | stage | reason / flags (examples) |
+|---|---|---|
+| `ok` | `done` | |
+| `ok_low_quality` | `done` | kept, flagged: `few_cells` (< 50), `low_valid_barcodes` (< 75%), `low_vdj_mapping` (< 50% of reads), `low_reads_in_cells` (< 50%), `low_read_depth` (< 5,000 read pairs/cell), `low_pairing` (< 30% paired) |
+| `failed` | `cellranger` | `corrupt_fastq`, `no_fastqs_found`, `chemistry_not_detected`, `low_valid_barcodes`, `too_few_reads`, `reads_too_short`, `no_vdj_reads`, `out_of_memory`, `disk_full`, or `cellranger_error` (unrecognised; see `detail`) |
+| `failed` | `bcr_qc` | `no_contigs` (e.g. a TCR library labelled BCR), `no_cells_passed` |
+| `failed` | `annotate_or_qc` / `unknown` | `task_failed`: the task died without a reason; see the run log |
+
+The table also carries Cell Ranger's key metrics (`cr_*`), the matched error line (`detail`)
+and cells passed/paired. Each sample's full Cell Ranger output is in
+`cellranger/<sample>/cellranger.log`, and the run log prints one warning per failed or flagged sample.
+Flags never drop a sample; the thresholds are in `bin/sample_status.py`.
+
+Retries: only out-of-memory, kill signals and lost hosts, since a bad file fails the same way
+every time. A damaged FASTQ (`gzip -t file.fastq.gz` confirms it) has to be re-uploaded.
+`--skip_failed_samples false` stops the whole run at the first failed sample instead. If
+**every** sample fails, `BCR_OBJECT` stops with an error.
 
 ## Merging with scRNA-seq and scTCR
 

@@ -25,7 +25,7 @@ nextflow.enable.dsl = 2
 include { SAMPLESHEET_CHECK            } from './modules/local/samplesheet_check.nf'
 include { CELLRANGER_VDJ               } from './modules/local/cellranger_vdj.nf'
 include { CHANGEO_ANNOTATE             } from './modules/local/changeo_annotate.nf'
-include { BCR_QC; BCR_QC_COLLECT       } from './modules/local/bcr_qc.nf'
+include { BCR_QC; BCR_QC_COLLECT; SAMPLE_STATUS } from './modules/local/bcr_qc.nf'
 include { DEFINE_CLONES; GERMLINE_SHM; LINEAGE } from './modules/local/immcantation.nf'
 include { BCR_OBJECT; ATTACH_GEX       } from './modules/local/bcr_object.nf'
 
@@ -78,6 +78,7 @@ workflow {
     ch_sheet = SAMPLESHEET_CHECK(channel.fromPath(params.input, checkIfExists: true)).csv
     ch_rows  = ch_sheet.splitCsv(header: true)
     ch_versions = channel.empty()
+    ch_cr_status = channel.empty()
 
     // ── contigs: Cell Ranger, or supplied ────────────────────────────────────
     if (params.input_type == 'fastq') {
@@ -106,6 +107,7 @@ workflow {
 
         CELLRANGER_VDJ(ch_reads, file(ref))
         ch_contigs  = CELLRANGER_VDJ.out.contigs
+        ch_cr_status = CELLRANGER_VDJ.out.status
         ch_versions = ch_versions.mix(CELLRANGER_VDJ.out.versions)
     } else {
         ch_contigs = ch_rows.map { r ->
@@ -131,6 +133,23 @@ workflow {
                      "See BCR_QC/tables/bcr_qc_summary.tsv."
         }
 
+    // One row per sample saying why it is in, flagged, or out. Logged here too, so the
+    // reason is in the run log, not only in BCR_QC/tables/sample_status.tsv.
+    def no_file = file("${projectDir}/assets/NO_FILE_lineage", checkIfExists: true)
+    ch_cr_status
+        .flatMap { f -> f.splitCsv(sep: '\t', header: true) }
+        .subscribe { r ->
+            if (r.status == 'failed')
+                log.warn "Sample ${r.sample}: Cell Ranger FAILED (${r.reason}) - skipped. ${r.detail ?: ''}"
+            else if (r.flags)
+                log.warn "Sample ${r.sample}: low quality (${r.flags}) - kept; see BCR_QC/tables/sample_status.tsv."
+        }
+    SAMPLE_STATUS(
+        ch_sheet,
+        BCR_QC_COLLECT.out.summary.ifEmpty(no_file),
+        ch_cr_status.collect().ifEmpty([no_file])
+    )
+
     // ── clones, per subject ──────────────────────────────────────────────────
     ch_subject = BCR_QC.out.airr
         .map { meta, f -> tuple(meta.subject, f) }
@@ -154,7 +173,7 @@ workflow {
         ch_versions = ch_versions.mix(GERMLINE_SHM.out.versions)
     }
 
-    def no_lineage = file("${projectDir}/assets/NO_FILE_lineage", checkIfExists: true)
+    def no_lineage = no_file
     ch_lineage = channel.value([no_lineage])
     if (run_lineage) {
         LINEAGE(GERMLINE_SHM.out.db)
@@ -189,8 +208,8 @@ workflow {
     workflow.onComplete = {
         if (workflow.stats.ignoredCount > 0) {
             log.warn "${workflow.stats.ignoredCount} task(s) FAILED and were skipped - see 'Error is ignored' " +
-                     "above. CELLRANGER_VDJ: that sample is missing from the results (a 'corrupt deflate " +
-                     "stream' message means a damaged FASTQ - re-upload it). LINEAGE: that patient has no trees."
+                     "above. LINEAGE: that patient has no trees. Other steps: that sample is missing; " +
+                     "BCR_QC/tables/sample_status.tsv lists every sample with its status and reason."
         }
         log.info(workflow.success
             ? "SCRATCH-BCR finished. Per-cell BCR table: ${params.outdir}/bridge/merged_bcr_object/post_qc_cells.tsv"

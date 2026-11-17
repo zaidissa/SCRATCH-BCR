@@ -77,3 +77,32 @@ process BCR_QC_COLLECT {
     concat_tables.py bcr_qc_summary.tsv    summary/* || touch bcr_qc_summary.tsv
     """
 }
+
+/*
+ * SAMPLE_STATUS - one row per samplesheet sample: ok, ok_low_quality (flags from Cell
+ * Ranger's metrics), or failed with the stage and reason (corrupt_fastq, no_cells_passed,
+ * ...). Samples that never produced a row are reported too (task_failed).
+ */
+process SAMPLE_STATUS {
+    label 'process_single'
+    container "${params.container_immcantation}"
+
+    input:
+      path samplesheet
+      path qc_summary, stageAs: 'qc/*'
+      path cr_status,  stageAs: 'status/*'
+
+    output:
+      path "sample_status.tsv", emit: tsv
+
+    script:
+    def qc = qc_summary.name.startsWith('NO_FILE') ? '' : "--qc ${qc_summary}"
+    """
+    sample_status.py collect --samplesheet ${samplesheet} ${qc} \$(ls status/* | grep -v NO_FILE || true)
+    """
+
+    stub:
+    """
+    printf 'sample\\tstatus\\n' > sample_status.tsv
+    """
+}

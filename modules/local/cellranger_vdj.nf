@@ -10,6 +10,12 @@
  * any FASTQ naming works. Cell Ranger runs under meta.cr_id (the sample name with every
  * character outside [A-Za-z0-9_-] replaced, which its --id requires); the run folder is
  * then renamed to the samplesheet's sample name, which is the prefix of every cell_id.
+ *
+ * Every run writes <sample>_cellranger_status.tsv (bin/sample_status.py): the failure
+ * reason read from Cell Ranger's message (corrupt_fastq, chemistry_not_detected,
+ * too_few_reads, ...) or, on success, key metrics and low-quality flags. A data failure
+ * with --skip_failed_samples true exits 0 with no contigs, so the sample drops out with
+ * its reason recorded; an out-of-memory failure exits 137 so it is retried with more.
  */
 process CELLRANGER_VDJ {
     tag "${meta.id}"
@@ -22,16 +28,21 @@ process CELLRANGER_VDJ {
 
     output:
       tuple val(meta), path("${meta.id}/outs/filtered_contig_annotations.csv"),
-                       path("${meta.id}/outs/filtered_contig.fasta"),           emit: contigs
-      path "${meta.id}/outs/*",                                                emit: outs
+                       path("${meta.id}/outs/filtered_contig.fasta"),           emit: contigs, optional: true
+      path "${meta.id}/outs/*",                                                emit: outs,    optional: true
+      path "${meta.id}_cellranger_status.tsv",                                 emit: status
+      path "cellranger.log",                                                   emit: log
       path "versions.yml",                                                     emit: versions
 
     script:
     def args = task.ext.args ?: ''
     def cr   = meta.cr_id ?: meta.id
+    def skip = params.skip_failed_samples.toString() == 'true'
+    def last = task.attempt > 2
     """
     cellranger_renaming.py "${cr}" fastq
 
+    set +e
     cellranger vdj \\
         --id="${cr}" \\
         --fastqs=fastq \\
@@ -40,9 +51,23 @@ process CELLRANGER_VDJ {
         --chain=${params.vdj_chain} \\
         --localcores=${task.cpus} \\
         --localmem=${task.memory.toGiga()} \\
-        ${args}
+        ${args} 2>&1 | tee cellranger.log
+    rc=\${PIPESTATUS[0]}
+    set -e
 
-    if [ "${cr}" != "${meta.id}" ]; then mv "${cr}" "${meta.id}"; fi
+    if [ \$rc -eq 0 ] && [ "${cr}" != "${meta.id}" ]; then mv "${cr}" "${meta.id}"; fi
+    sample_status.py cellranger --sample '${meta.id}' --subject '${meta.subject}' \\
+        --exit-code \$rc --log cellranger.log --metrics "${meta.id}/outs/metrics_summary.csv"
+
+    if [ \$rc -ne 0 ]; then
+        reason=\$(awk -F'\\t' 'NR==1{for(i=1;i<=NF;i++) if(\$i=="reason") c=i} NR==2{print \$c}' ${meta.id}_cellranger_status.tsv)
+        echo "Cell Ranger failed for ${meta.id}: \$reason" >&2
+        # More memory may fix it: fail the task so Nextflow retries with a bigger one.
+        if [ "\$reason" = out_of_memory ] && [ "${last}" = false ]; then exit 137; fi
+        # Data problem: keep the status row, drop the sample (or stop the run).
+        rm -rf "${cr}"
+        if [ "${skip}" = false ]; then exit \$rc; fi
+    fi
 
     # Cell Ranger leaves ~GBs of intermediate files in <id>/SC_VDJ_ASSEMBLER_CS; only
     # outs/ is declared, so the rest stays in the work dir and is never published.
@@ -56,6 +81,8 @@ process CELLRANGER_VDJ {
     def cr = meta.cr_id ?: meta.id
     """
     cellranger_renaming.py "${cr}" fastq
+    touch cellranger.log
+    printf 'sample\\tsubject\\tstage\\tstatus\\treason\\n${meta.id}\\t${meta.subject}\\tcellranger\\tok\\t\\n' > ${meta.id}_cellranger_status.tsv
     mkdir -p ${meta.id}/outs
     touch ${meta.id}/outs/filtered_contig_annotations.csv ${meta.id}/outs/filtered_contig.fasta \\
           ${meta.id}/outs/airr_rearrangement.tsv ${meta.id}/outs/metrics_summary.csv \\
