@@ -150,6 +150,9 @@ def main():
     aq["barcode"] = aq["sequence_id"].map(bc_of)
     aq["cell_id"] = s + "_" + bare(aq["barcode"])          # was the bare 10x barcode
     aq["sample"], aq["subject"] = s, subject
+    # Cell Ranger names contigs <barcode>-1_contig_N, so two libraries of one patient can
+    # share a sequence_id; clones, germlines and tree tips are per patient and need it unique.
+    aq["sequence_id"] = s + "_" + aq["sequence_id"]
     if umi_col and umi_col != "umi_count":
         aq["umi_count"] = aq[umi_col]
 

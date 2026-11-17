@@ -55,11 +55,12 @@ fix_types <- function(db) {
 
 summary_file <- paste0(subject, "_lineage_summary.tsv")
 empty_summary <- function(note) {
-    write.table(data.frame(subject = subject, clone_id = character(0), tree_id = character(0), n_seqs = integer(0),
+    msg(note)
+    write.table(data.frame(subject = character(0), clone_id = character(0), tree_id = character(0), n_seqs = integer(0),
                            n_cells = integer(0), tree_tips = integer(0), tree_length = numeric(0),
                            chain = character(0), build = character(0)),
                 summary_file, sep = "\t", quote = FALSE, row.names = FALSE)
-    msg(note); quit(save = "no")
+    quit(save = "no")
 }
 
 db <- if (file.size(input) > 0) fix_types(read_rearrangement(input)) else data.frame()

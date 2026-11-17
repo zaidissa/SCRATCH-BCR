@@ -188,9 +188,9 @@ workflow {
 
     workflow.onComplete = {
         if (workflow.stats.ignoredCount > 0) {
-            log.warn "${workflow.stats.ignoredCount} sample(s) FAILED in Cell Ranger and were skipped " +
-                     "(see 'Error is ignored' above; a 'corrupt deflate stream' message means a damaged " +
-                     "FASTQ - re-upload it). The results cover the remaining samples only."
+            log.warn "${workflow.stats.ignoredCount} task(s) FAILED and were skipped - see 'Error is ignored' " +
+                     "above. CELLRANGER_VDJ: that sample is missing from the results (a 'corrupt deflate " +
+                     "stream' message means a damaged FASTQ - re-upload it). LINEAGE: that patient has no trees."
         }
         log.info(workflow.success
             ? "SCRATCH-BCR finished. Per-cell BCR table: ${params.outdir}/bridge/merged_bcr_object/post_qc_cells.tsv"

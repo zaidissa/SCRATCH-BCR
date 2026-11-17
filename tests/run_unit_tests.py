@@ -46,6 +46,7 @@ with tempfile.TemporaryDirectory() as d:
     check("cells paired",              int(s.cells_paired_heavy_light), 4)
     a = pd.read_csv(f"{d}/S1_airr_qc.tsv", sep="\t")
     check("airr cell_id prefixed",     a.cell_id.str.startswith("S1_").all(), True)
+    check("airr sequence_id prefixed", a.sequence_id.str.startswith("S1_").all(), True)
     check("airr cell_id no -1",        a.cell_id.str.endswith("-1").any(), False)
     check("status ok",                 s.status, "ok")
 
