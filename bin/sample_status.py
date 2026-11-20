@@ -21,7 +21,9 @@ import argparse, csv, os, re, sys
 # Cell Ranger message -> reason. First match wins; matched case-insensitively.
 FAILURES = [
     ("corrupt_fastq",         r"corrupt deflate stream|invalid gzip|unexpected end of file|"
-                              r"not in gzip format|crc32 mismatch|invalid block type"),
+                              r"not in gzip format|crc32 mismatch|invalid block type|"
+                              r"sequence and quality (length mismatch|not separated)|"
+                              r"(truncated|malformed|invalid) fastq"),
     ("no_fastqs_found",       r"no input fastqs were found|could not find fastq"),
     ("out_of_memory",         r"out of memory|cannot allocate memory|memoryerror|signal: killed"),
     ("low_valid_barcodes",    r"extremely low rate of correct barcodes|barcode.{0,40}(low|insufficient)"),

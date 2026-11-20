@@ -31,6 +31,7 @@ process DEFINE_CLONES {
         --method ${params.clone_method} \\
         --warn-above ${params.clonal_threshold_warn_above} \\
         --warn-below ${params.clonal_threshold_warn_below} \\
+        --subsample ${params.clonal_threshold_subsample} \\
         --nproc ${task.cpus} \\
         ${(airr instanceof List ? airr : [airr]).join(' ')}
 

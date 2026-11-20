@@ -332,6 +332,7 @@ are rooted on them.
 | `--clone_by` | `patient_id` | samplesheet column grouping samples for clones |
 | `--clonal_threshold` | `auto` | SHazaM fit per patient, else `--clonal_threshold_fallback` (0.15) |
 | `--clonal_threshold_warn_above` / `_below` | `0.25` / `0.05` | a fitted threshold outside this range is flagged in `<patient>_threshold.tsv` (`threshold_note`) and the run log; it is still used |
+| `--clonal_threshold_subsample` | `5000` | the threshold fit compares each junction with at most this many others per V/J/length group, so a patient with a large expanded clone doesn't take hours; `0` uses all |
 | `--clone_method` | `hierarchical` | or `identical` |
 | `--bcr_drop_multi_heavy` | `true` | drop cells with more than one productive heavy chain |
 | `--bcr_multi_light` | `keep_top` | `drop_cell`, `keep_all` |

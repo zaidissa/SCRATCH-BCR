@@ -22,8 +22,12 @@
 # stops the run - the subject's _threshold.tsv gets a threshold_note, the log a WARNING,
 # and the distance plot shows where the cut fell. Re-run with --clonal_threshold <num>.
 #
+# Large subjects: the threshold fit compares each junction with at most --subsample others
+# per V/J/length group (shazam's subsample), which keeps a patient with a big expanded
+# clone from running for hours; clone calling itself always uses every junction.
+#
 # Usage: define_clones.R --subject S --threshold auto|<num> --fallback-threshold 0.15
-#                        --method hierarchical|identical --nproc N
+#                        --method hierarchical|identical --nproc N [--subsample 5000]
 #                        [--warn-above 0.25] [--warn-below 0.05] <airr_qc.tsv> [...]
 
 suppressPackageStartupMessages({
@@ -39,7 +43,7 @@ suppressPackageStartupMessages({
     if (!is.na(i) && length(.args) > i) .args[i + 1] else default
 }
 flags   <- c("--subject", "--threshold", "--fallback-threshold", "--method", "--nproc",
-             "--warn-above", "--warn-below")
+             "--warn-above", "--warn-below", "--subsample")
 inputs  <- .args[!(.args %in% flags) & !(seq_along(.args) - 1) %in% match(flags, .args)]
 subject <- .get("--subject", "subject")
 thr_arg <- .get("--threshold", "auto")
@@ -48,7 +52,11 @@ warn_hi <- as.numeric(.get("--warn-above", "0.25"))
 warn_lo <- as.numeric(.get("--warn-below", "0.05"))
 method  <- .get("--method", "hierarchical")
 nproc   <- as.integer(.get("--nproc", "1"))
-msg <- function(...) message("[define_clones] ", subject, ": ", ...)
+subsample <- as.integer(.get("--subsample", "0"))            # 0 = no subsampling
+t0 <- Sys.time()
+msg <- function(...) message("[define_clones] ", format(Sys.time(), "%H:%M:%S"), " (+",
+                             round(as.numeric(difftime(Sys.time(), t0, units = "mins")), 1),
+                             " min) ", subject, ": ", ...)
 
 # airr::read_rearrangement() types only AIRR-standard columns. Change-O's --extended
 # columns (v/d/j_germline_length, *_start/*_end) and our own come back as character, and
@@ -78,6 +86,14 @@ if (nrow(db) == 0 || !any(db$locus == "IGH")) {
     quit(save = "no")
 }
 
+# Both steps compare junctions pairwise within V gene / J gene / junction-length groups,
+# so the largest group's unique-junction count sets the run time (quadratic in it).
+heavy <- db[db$locus == "IGH", ]
+grp <- table(paste(sub("[*,].*", "", heavy$v_call), sub("[*,].*", "", heavy$j_call),
+                   nchar(heavy$junction))[!duplicated(paste(heavy$v_call, heavy$j_call, heavy$junction))])
+msg(sprintf("%d heavy chains, %d V/J/length groups, largest %d unique junctions (%s)",
+            nrow(heavy), length(grp), max(grp), names(grp)[which.max(grp)]))
+
 # ── 1. threshold ──────────────────────────────────────────────────────────────
 threshold <- suppressWarnings(as.numeric(thr_arg))
 if (method == "identical") {
@@ -89,7 +105,8 @@ if (method == "identical") {
         distToNearest(db, sequenceColumn = "junction", vCallColumn = "v_call",
                       jCallColumn = "j_call", model = "ham", normalize = "len",
                       cellIdColumn = "cell_id", locusColumn = "locus",
-                      onlyHeavy = TRUE, VJthenLen = FALSE, nproc = nproc),
+                      onlyHeavy = TRUE, VJthenLen = FALSE, nproc = nproc,
+                      subsample = if (subsample > 0) subsample else NULL),
         error = function(e) { msg("distToNearest failed: ", conditionMessage(e)); NULL })
     d <- if (!is.null(dist)) dist$dist_nearest[!is.na(dist$dist_nearest)] else numeric(0)
     fit_ok <- function(t) !is.null(t) && length(t@threshold) && is.finite(t@threshold) &&
@@ -132,6 +149,7 @@ if (thr_row$threshold_method %in% c("gmm", "density", "fallback")) {
     }
 }
 
+msg("calling clones")
 # ── 2. clones ─────────────────────────────────────────────────────────────────
 clones <- if (method == "identical") {
     identicalClones(db, method = "nt", junction = "junction", v_call = "v_call",
@@ -147,6 +165,7 @@ clones <- if (method == "identical") {
 clones <- as.data.frame(clones)
 # Light-chain subgroups within each heavy-chain clone (cells whose light chains disagree
 # land in different subgroups). Best effort: older dowser lacks it.
+msg("clones called; resolving light chains")
 if (requireNamespace("dowser", quietly = TRUE) &&
     "resolveLightChains" %in% getNamespaceExports("dowser") && any(clones$locus != "IGH")) {
     clones <- tryCatch(as.data.frame(dowser::resolveLightChains(clones, nproc = nproc)),
